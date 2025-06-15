@@ -43,12 +43,12 @@ const TronGame: React.FC = () => {
       setLoading(true);
       
       const tableQueries = [
-        { name: 'users', query: supabase.from('users').select('*', { count: 'exact', head: false }).limit(50) },
-        { name: 'posts', query: supabase.from('posts').select('*', { count: 'exact', head: false }).limit(50) },
-        { name: 'comments', query: supabase.from('comments').select('*', { count: 'exact', head: false }).limit(50) },
-        { name: 'products', query: supabase.from('products').select('*', { count: 'exact', head: false }).limit(50) },
-        { name: 'orders', query: supabase.from('orders').select('*', { count: 'exact', head: false }).limit(50) },
-        { name: 'analytics', query: supabase.from('analytics').select('*', { count: 'exact', head: false }).limit(50) }
+        { name: 'users', query: supabase.from('users' as any).select('*', { count: 'exact', head: false }).limit(50) },
+        { name: 'posts', query: supabase.from('posts' as any).select('*', { count: 'exact', head: false }).limit(50) },
+        { name: 'comments', query: supabase.from('comments' as any).select('*', { count: 'exact', head: false }).limit(50) },
+        { name: 'products', query: supabase.from('products' as any).select('*', { count: 'exact', head: false }).limit(50) },
+        { name: 'orders', query: supabase.from('orders' as any).select('*', { count: 'exact', head: false }).limit(50) },
+        { name: 'analytics', query: supabase.from('analytics' as any).select('*', { count: 'exact', head: false }).limit(50) }
       ];
 
       const tableDataPromises = tableQueries.map(async ({ name, query }) => {
@@ -94,7 +94,7 @@ const TronGame: React.FC = () => {
   const handleRecordUpdate = async (tableId: string, recordId: string, updatedData: any) => {
     try {
       const { error } = await supabase
-        .from(tableId)
+        .from(tableId as any)
         .update(updatedData)
         .eq('id', recordId);
 
@@ -121,7 +121,7 @@ const TronGame: React.FC = () => {
   const handleRecordDelete = async (tableId: string, recordId: string) => {
     try {
       const { error } = await supabase
-        .from(tableId)
+        .from(tableId as any)
         .delete()
         .eq('id', recordId);
 
@@ -176,7 +176,11 @@ const TronGame: React.FC = () => {
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.setClearColor(0x000011);
     rendererRef.current = renderer;
-    mountRef.current.appendChild(renderer.domElement);
+    
+    // Only append if not already appended
+    if (mountRef.current && !mountRef.current.contains(renderer.domElement)) {
+      mountRef.current.appendChild(renderer.domElement);
+    }
 
     // Create Tron-style grid floor
     const createGrid = () => {
@@ -379,7 +383,8 @@ const TronGame: React.FC = () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('resize', handleResize);
       
-      if (mountRef.current && rendererRef.current) {
+      // Safe cleanup - only remove if element exists and is actually a child
+      if (mountRef.current && rendererRef.current && mountRef.current.contains(rendererRef.current.domElement)) {
         mountRef.current.removeChild(rendererRef.current.domElement);
       }
       rendererRef.current?.dispose();
