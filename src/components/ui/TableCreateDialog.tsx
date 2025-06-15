@@ -8,7 +8,7 @@ import {
   DialogFooter,
 } from '../ui/dialog';
 import { Button } from '../ui/button';
-import { Plus, Trash2, Sparkles, Brain } from 'lucide-react';
+import { Plus, Trash2, Sparkles, Brain, Database } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -182,25 +182,22 @@ Make the response valid JSON without any markdown formatting.`
 
     try {
       const sql = generateSQL();
+      console.log('Creating table with SQL:', sql);
       
-      // Execute the SQL directly via Supabase
-      const { error } = await supabase.rpc('exec_sql', { sql_query: sql });
+      // Execute the SQL query using rpc
+      const { data, error } = await supabase.rpc('exec_sql' as any, { 
+        query: sql 
+      } as any);
       
       if (error) {
-        // If the RPC function doesn't exist, create the table via edge function
-        console.log('Creating table via direct SQL execution...');
-        console.log(sql);
-        
-        toast({
-          title: "Table Created (Simulated)",
-          description: `Table "${tableName}" structure has been generated. In a production environment, this would create the actual table.`,
-        });
-      } else {
-        toast({
-          title: "Table Created Successfully",
-          description: `Table "${tableName}" has been created in the database`,
-        });
+        console.error('Error creating table:', error);
+        throw error;
       }
+      
+      toast({
+        title: "Table Created Successfully",
+        description: `Table "${tableName}" has been created in the database`,
+      });
       
       onClose();
       onRefresh();
@@ -208,13 +205,9 @@ Make the response valid JSON without any markdown formatting.`
       console.error('Error creating table:', error);
       toast({
         title: "Creation Failed",
-        description: "Failed to create table. Check console for SQL to run manually.",
+        description: "Failed to create table. Check console for details.",
         variant: "destructive"
       });
-      
-      // Show the SQL in console for manual execution
-      console.log("Run this SQL in your Supabase SQL editor:");
-      console.log(generateSQL());
     } finally {
       setIsCreating(false);
     }
