@@ -10,6 +10,7 @@ import {
 import { Button } from '../ui/button';
 import { Plus, Trash2, Sparkles, Brain, Database } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 
 interface Field {
   name: string;
@@ -57,7 +58,7 @@ export const TableCreateDialog: React.FC<TableCreateDialogProps> = ({
   };
 
   const removeField = (index: number) => {
-    if (index < 2) return; // Don't allow removing id and created_at
+    if (index < 2) return;
     setFields(fields.filter((_, i) => i !== index));
   };
 
@@ -107,7 +108,7 @@ export const TableCreateDialog: React.FC<TableCreateDialogProps> = ({
           'anthropic-version': '2023-06-01'
         },
         body: JSON.stringify({
-          model: 'claude-3-sonnet-20240229',
+          model: 'claude-3-5-sonnet-20241022',
           max_tokens: 1000,
           messages: [{
             role: 'user',
@@ -181,6 +182,26 @@ Make the response valid JSON without any markdown formatting.`
 
     try {
       const sql = generateSQL();
+      
+      // Execute the SQL directly using Supabase RPC
+      const { error } = await supabase.rpc('exec_sql', { sql_query: sql });
+      
+      if (error) {
+        throw error;
+      }
+      
+      toast({
+        title: "Table Created Successfully",
+        description: `Table "${tableName}" has been created in your database.`,
+      });
+      
+      onClose();
+      onRefresh();
+    } catch (error) {
+      console.error('Error creating table:', error);
+      
+      // Fallback to manual SQL generation if RPC fails
+      const sql = generateSQL();
       console.log('Generated SQL for manual execution:');
       console.log(sql);
       
@@ -191,13 +212,6 @@ Make the response valid JSON without any markdown formatting.`
       
       onClose();
       onRefresh();
-    } catch (error) {
-      console.error('Error generating table schema:', error);
-      toast({
-        title: "Generation Failed",
-        description: "Failed to generate table schema. Please try again.",
-        variant: "destructive"
-      });
     } finally {
       setIsCreating(false);
     }
@@ -302,7 +316,6 @@ Make the response valid JSON without any markdown formatting.`
             />
           </div>
 
-          {/* Fields */}
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <label className="text-cyan-400 font-mono text-sm font-bold">
@@ -322,7 +335,6 @@ Make the response valid JSON without any markdown formatting.`
             <div className="space-y-3">
               {fields.map((field, index) => (
                 <div key={index} className="grid grid-cols-12 gap-2 items-center p-3 bg-gray-900 rounded border border-gray-700">
-                  {/* Field Name */}
                   <div className="col-span-3">
                     <input
                       type="text"
@@ -338,7 +350,6 @@ Make the response valid JSON without any markdown formatting.`
                     />
                   </div>
 
-                  {/* Field Type */}
                   <div className="col-span-2">
                     <select
                       value={field.type}
@@ -356,7 +367,6 @@ Make the response valid JSON without any markdown formatting.`
                     </select>
                   </div>
 
-                  {/* Nullable */}
                   <div className="col-span-2 flex items-center">
                     <input
                       type="checkbox"
@@ -368,7 +378,6 @@ Make the response valid JSON without any markdown formatting.`
                     <span className="text-xs">Nullable</span>
                   </div>
 
-                  {/* Default Value */}
                   <div className="col-span-4">
                     <input
                       type="text"
@@ -384,7 +393,6 @@ Make the response valid JSON without any markdown formatting.`
                     />
                   </div>
 
-                  {/* Remove Button */}
                   <div className="col-span-1">
                     {index >= 2 && (
                       <Button
@@ -402,7 +410,6 @@ Make the response valid JSON without any markdown formatting.`
             </div>
           </div>
 
-          {/* SQL Preview */}
           {tableName && (
             <div className="space-y-2">
               <label className="text-cyan-400 font-mono text-sm font-bold">
@@ -428,7 +435,7 @@ Make the response valid JSON without any markdown formatting.`
             disabled={isCreating || !tableName.trim()}
             className="bg-cyan-600 hover:bg-cyan-700 text-black font-bold"
           >
-            {isCreating ? 'GENERATING...' : 'GENERATE SQL'}
+            {isCreating ? 'CREATING...' : 'CREATE TABLE'}
           </Button>
         </DialogFooter>
       </DialogContent>

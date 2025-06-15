@@ -1,3 +1,4 @@
+
 import * as THREE from 'three';
 
 interface TableData {
@@ -88,18 +89,17 @@ export class DatabaseBuilding {
   private createDataBlocks() {
     if (!this.tableData.sampleData) return;
 
-    const recordsPerFloor = 4; // Reduced to fit better inside
-    const floorHeight = 3.5; // Slightly reduced spacing
-    const blockSize = 1.2; // Slightly smaller blocks
-    const buildingWidth = 12; // Inner building dimensions (smaller than outer 15)
+    const recordsPerFloor = 4;
+    const floorHeight = 3.5;
+    const blockSize = 1.2;
     
     this.tableData.sampleData.forEach((record, index) => {
       const floor = Math.floor(index / recordsPerFloor);
       const positionOnFloor = index % recordsPerFloor;
       
       // Position blocks in a 2x2 grid per floor, centered inside the building
-      const gridX = (positionOnFloor % 2) - 0.5; // -0.5 or 0.5
-      const gridZ = Math.floor(positionOnFloor / 2) - 0.5; // -0.5 or 0.5
+      const gridX = (positionOnFloor % 2) - 0.5;
+      const gridZ = Math.floor(positionOnFloor / 2) - 0.5;
       
       const blockGeometry = new THREE.BoxGeometry(blockSize, blockSize, blockSize);
       const blockMaterial = new THREE.MeshPhongMaterial({
@@ -114,9 +114,9 @@ export class DatabaseBuilding {
       
       // Position blocks inside the building bounds
       block.position.set(
-        gridX * 4, // Spread blocks across building width
-        floorHeight + (floor * floorHeight) + blockSize/2 + 2, // Start above base
-        gridZ * 4 // Spread blocks across building depth
+        gridX * 4,
+        floorHeight + (floor * floorHeight) + blockSize/2 + 2,
+        gridZ * 4
       );
       
       // Add hover effect and click data
@@ -188,18 +188,17 @@ export class DatabaseBuilding {
 
   private getBuildingColor(): number {
     const colors = {
-      users: 0x00ffff,      // Cyan
-      posts: 0xff0066,      // Pink
-      comments: 0x66ff00,   // Green
-      products: 0xffff00,   // Yellow
-      orders: 0xff6600,     // Orange
-      analytics: 0x6600ff   // Purple
+      users: 0x00ffff,
+      posts: 0xff0066,
+      comments: 0x66ff00,
+      products: 0xffff00,
+      orders: 0xff6600,
+      analytics: 0x6600ff
     };
     return colors[this.tableData.tableName as keyof typeof colors] || 0x00ffff;
   }
 
   private getBlockColor(record: any): number {
-    // Color blocks based on record properties
     const hash = this.hashCode(JSON.stringify(record));
     const hue = Math.abs(hash) % 360;
     return new THREE.Color().setHSL(hue / 360, 0.7, 0.6).getHex();
@@ -210,7 +209,7 @@ export class DatabaseBuilding {
     for (let i = 0; i < str.length; i++) {
       const char = str.charCodeAt(i);
       hash = ((hash << 5) - hash) + char;
-      hash = hash & hash; // Convert to 32bit integer
+      hash = hash & hash;
     }
     return hash;
   }
@@ -220,15 +219,16 @@ export class DatabaseBuilding {
     if (block && block.userData.record) {
       // Enhanced visual feedback for click
       const originalScale = block.scale.clone();
-      const originalEmissive = block.material.emissiveIntensity;
+      const material = block.material as THREE.MeshPhongMaterial;
+      const originalEmissive = material.emissiveIntensity;
       
       // Scale and brightness effect
       block.scale.multiplyScalar(1.3);
-      block.material.emissiveIntensity = 0.8;
+      material.emissiveIntensity = 0.8;
       
       setTimeout(() => {
         block.scale.copy(originalScale);
-        block.material.emissiveIntensity = originalEmissive;
+        material.emissiveIntensity = originalEmissive;
       }, 300);
       
       // Call the record click handler to open the edit dialog
@@ -245,20 +245,21 @@ export class DatabaseBuilding {
     const time = Date.now() * 0.001;
     
     // Gentle building sway
-    this.group.rotation.y = Math.sin(time * 0.5) * 0.005; // Reduced sway
+    this.group.rotation.y = Math.sin(time * 0.5) * 0.005;
     
     // Animate record blocks with more subtle movement
     this.recordBlocks.forEach((block, index) => {
-      block.rotation.y = time * 0.3 + index * 0.1; // Slower rotation
+      block.rotation.y = time * 0.3 + index * 0.1;
       
       // More subtle floating animation
       const baseY = block.userData.baseY || block.position.y;
       block.userData.baseY = baseY;
-      block.position.y = baseY + Math.sin(time * 1.5 + index) * 0.2; // Smaller amplitude
+      block.position.y = baseY + Math.sin(time * 1.5 + index) * 0.2;
       
       // Add gentle pulsing to emissive intensity
+      const material = block.material as THREE.MeshPhongMaterial;
       const baseIntensity = 0.3;
-      block.material.emissiveIntensity = baseIntensity + Math.sin(time * 2 + index) * 0.1;
+      material.emissiveIntensity = baseIntensity + Math.sin(time * 2 + index) * 0.1;
     });
   }
 
