@@ -1,5 +1,16 @@
+
 import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
+
+interface TableData {
+  tableName: string;
+  recordCount: number;
+  lastUpdated: string;
+  schema?: any[];
+  sampleData?: any[];
+}
 
 const TronGame: React.FC = () => {
   const mountRef = useRef<HTMLDivElement>(null);
@@ -11,10 +22,61 @@ const TronGame: React.FC = () => {
   const mouseRef = useRef<THREE.Vector2>();
   
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
-  const [nodeData, setNodeData] = useState<any>(null);
+  const [nodeData, setNodeData] = useState<TableData | null>(null);
+  const [tablesData, setTablesData] = useState<TableData[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
+
+  // Fetch real table data from Supabase
+  const fetchTableData = async () => {
+    try {
+      setLoading(true);
+      const tables = ['users', 'posts', 'comments', 'products', 'orders', 'analytics'];
+      const tableDataPromises = tables.map(async (tableName) => {
+        const { data, error, count } = await supabase
+          .from(tableName)
+          .select('*', { count: 'exact', head: false })
+          .limit(5);
+
+        if (error) {
+          console.error(`Error fetching ${tableName}:`, error);
+          return null;
+        }
+
+        return {
+          tableName,
+          recordCount: count || 0,
+          lastUpdated: new Date().toISOString().split('T')[0],
+          sampleData: data || []
+        };
+      });
+
+      const results = await Promise.all(tableDataPromises);
+      const validResults = results.filter(Boolean) as TableData[];
+      setTablesData(validResults);
+      
+      toast({
+        title: "Database Connected",
+        description: `Successfully loaded ${validResults.length} tables from Supabase`,
+      });
+    } catch (error) {
+      console.error('Error fetching database data:', error);
+      toast({
+        title: "Connection Error",
+        description: "Failed to connect to database",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    if (!mountRef.current) return;
+    fetchTableData();
+  }, []);
+
+  useEffect(() => {
+    if (!mountRef.current || tablesData.length === 0) return;
 
     // Scene setup
     const scene = new THREE.Scene();
@@ -58,51 +120,57 @@ const TronGame: React.FC = () => {
       gridHelper.position.y = 0;
       gridGroup.add(gridHelper);
 
-      // Add glowing effect to grid
-      const gridMaterial = new THREE.LineBasicMaterial({ 
-        color: 0x00ffff, 
-        transparent: true, 
-        opacity: 0.6 
-      });
-      
       scene.add(gridGroup);
     };
 
-    // Mock database tables data
-    const tableNames = ['users', 'posts', 'comments', 'orders', 'products', 'categories', 'sessions', 'logs', 'profiles', 'messages', 'files', 'settings', 'tokens', 'analytics', 'notifications'];
-
-    // Create Tron-style cubes/data nodes
+    // Create Tron-style cubes/data nodes using real table data
     const createDataNodes = () => {
       const geometry = new THREE.BoxGeometry(2, 2, 2);
       
-      for (let i = 0; i < 15; i++) {
-        // Create glowing material for each cube
+      tablesData.forEach((tableData, i) => {
+        // Create different colors based on table type
+        let color, emissive;
+        if (tableData.tableName.includes('user')) {
+          color = 0x00ffff; // Cyan for user data
+          emissive = 0x004444;
+        } else if (tableData.tableName.includes('analytics')) {
+          color = 0xff6600; // Orange for analytics
+          emissive = 0x442200;
+        } else if (tableData.tableName.includes('order') || tableData.tableName.includes('product')) {
+          color = 0x00ff66; // Green for commerce
+          emissive = 0x004422;
+        } else {
+          color = 0xff0066; // Pink for content
+          emissive = 0x440022;
+        }
+
         const material = new THREE.MeshPhongMaterial({
-          color: Math.random() > 0.5 ? 0x00ffff : 0xff0066,
-          emissive: Math.random() > 0.5 ? 0x004444 : 0x440022,
+          color,
+          emissive,
           transparent: true,
           opacity: 0.8
         });
 
         const cube = new THREE.Mesh(geometry, material);
         
-        // Random positioning
-        cube.position.x = (Math.random() - 0.5) * 80;
-        cube.position.y = 1 + Math.random() * 8;
-        cube.position.z = (Math.random() - 0.5) * 80;
+        // Position based on record count and table index
+        const angle = (i / tablesData.length) * Math.PI * 2;
+        const radius = 20 + (tableData.recordCount / 100) * 10;
+        
+        cube.position.x = Math.cos(angle) * radius;
+        cube.position.y = 2 + (tableData.recordCount / 50);
+        cube.position.z = Math.sin(angle) * radius;
         
         // Add table data and animation data
         cube.userData = {
-          rotationSpeed: 0.005 + Math.random() * 0.01, // Reduced rotation speed
-          floatSpeed: 0.001 + Math.random() * 0.002, // Reduced float speed
+          rotationSpeed: 0.005 + (tableData.recordCount / 10000),
+          floatSpeed: 0.001 + (tableData.recordCount / 50000),
           originalY: cube.position.y,
-          tableName: tableNames[i] || `table_${i}`,
-          recordCount: Math.floor(Math.random() * 10000) + 100,
-          lastUpdated: new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+          tableData: tableData
         };
 
         scene.add(cube);
-      }
+      });
     };
 
     // Lighting setup
@@ -130,7 +198,7 @@ const TronGame: React.FC = () => {
     };
 
     // Simplified camera controls
-    let cameraAngleY = 0; // Only track Y rotation (left/right)
+    let cameraAngleY = 0;
     let isMouseDown = false;
     let lastMouseX = 0;
 
@@ -146,11 +214,11 @@ const TronGame: React.FC = () => {
     const handleMouseMove = (event: MouseEvent) => {
       if (isMouseDown) {
         const deltaX = event.clientX - lastMouseX;
-        cameraAngleY -= deltaX * 0.01; // Only rotate left/right
+        cameraAngleY -= deltaX * 0.005;
         lastMouseX = event.clientX;
         
         // Update camera position based on angle
-        const radius = 40;
+        const radius = Math.sqrt(camera.position.x ** 2 + camera.position.z ** 2);
         camera.position.x = Math.sin(cameraAngleY) * radius;
         camera.position.z = Math.cos(cameraAngleY) * radius;
         camera.lookAt(0, 0, 0);
@@ -159,45 +227,42 @@ const TronGame: React.FC = () => {
 
     const handleWheel = (event: WheelEvent) => {
       event.preventDefault();
-      const zoomSpeed = 2;
       const currentRadius = Math.sqrt(camera.position.x ** 2 + camera.position.z ** 2);
       const newRadius = Math.max(10, Math.min(100, currentRadius + event.deltaY * 0.1));
       
-      // Maintain the Y rotation angle while zooming
       camera.position.x = Math.sin(cameraAngleY) * newRadius;
       camera.position.z = Math.cos(cameraAngleY) * newRadius;
       camera.lookAt(0, 0, 0);
     };
 
     const handleClick = (event: MouseEvent) => {
-      // Don't process clicks if we were dragging
       if (isMouseDown) return;
       
-      // Calculate mouse position in normalized device coordinates
       mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
       mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
 
-      // Update the picking ray with the camera and mouse position
       raycaster.setFromCamera(mouse, camera);
-
-      // Calculate objects intersecting the picking ray
-      const intersects = raycaster.intersectObjects(scene.children.filter(child => child instanceof THREE.Mesh && child.userData.tableName));
+      const intersects = raycaster.intersectObjects(scene.children.filter(child => child instanceof THREE.Mesh && child.userData.tableData));
 
       if (intersects.length > 0) {
         const clickedObject = intersects[0].object;
-        const tableData = clickedObject.userData;
+        const tableData = clickedObject.userData.tableData;
         
         setSelectedNode(tableData.tableName);
         setNodeData(tableData);
         
-        // Visual feedback - make the clicked cube glow brighter
+        // Visual feedback
         scene.children.forEach((child) => {
-          if (child instanceof THREE.Mesh && child.userData.tableName) {
+          if (child instanceof THREE.Mesh && child.userData.tableData) {
             if (child === clickedObject) {
               (child.material as THREE.MeshPhongMaterial).emissive.setHex(0x006666);
             } else {
-              const originalColor = Math.random() > 0.5 ? 0x004444 : 0x440022;
-              (child.material as THREE.MeshPhongMaterial).emissive.setHex(originalColor);
+              // Reset to original emissive color based on table type
+              const originalEmissive = child.userData.tableData.tableName.includes('user') ? 0x004444 :
+                                     child.userData.tableData.tableName.includes('analytics') ? 0x442200 :
+                                     child.userData.tableData.tableName.includes('order') || child.userData.tableData.tableName.includes('product') ? 0x004422 :
+                                     0x440022;
+              (child.material as THREE.MeshPhongMaterial).emissive.setHex(originalEmissive);
             }
           }
         });
@@ -225,7 +290,6 @@ const TronGame: React.FC = () => {
           break;
       }
       
-      // Update camera position for keyboard rotation
       if (event.code === 'KeyA' || event.code === 'ArrowLeft' || event.code === 'KeyD' || event.code === 'ArrowRight') {
         const currentRadius = Math.sqrt(camera.position.x ** 2 + camera.position.z ** 2);
         camera.position.x = Math.sin(cameraAngleY) * currentRadius;
@@ -238,16 +302,14 @@ const TronGame: React.FC = () => {
     const animate = () => {
       animationIdRef.current = requestAnimationFrame(animate);
 
-      // Animate data nodes with reduced movement
       scene.children.forEach((child) => {
         if (child instanceof THREE.Mesh && child.userData.rotationSpeed) {
           child.rotation.x += child.userData.rotationSpeed;
           child.rotation.y += child.userData.rotationSpeed * 0.5;
           child.rotation.z += child.userData.rotationSpeed * 0.3;
           
-          // Reduced floating animation
           child.position.y = child.userData.originalY + 
-            Math.sin(Date.now() * child.userData.floatSpeed) * 0.5; // Reduced from 2 to 0.5
+            Math.sin(Date.now() * child.userData.floatSpeed) * 0.5;
         }
       });
 
@@ -294,7 +356,17 @@ const TronGame: React.FC = () => {
       }
       rendererRef.current?.dispose();
     };
-  }, []);
+  }, [tablesData]);
+
+  if (loading) {
+    return (
+      <div className="w-full h-screen bg-black flex items-center justify-center">
+        <div className="text-cyan-400 font-mono text-lg">
+          INITIALIZING TRON DATABASE INTERFACE...
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="relative">
@@ -307,8 +379,9 @@ const TronGame: React.FC = () => {
           <div className="bg-black/50 border border-cyan-400 p-4 backdrop-blur-sm">
             <div className="text-cyan-400 text-lg mb-2">TRON DATABASE INTERFACE</div>
             <div className="text-cyan-300">STATUS: CONNECTED</div>
-            <div className="text-cyan-300">NODES: {selectedNode ? 'SELECTED' : 'SCANNING...'}</div>
-            <div className="text-cyan-300">USER: GUEST</div>
+            <div className="text-cyan-300">TABLES: {tablesData.length} LOADED</div>
+            <div className="text-cyan-300">NODE: {selectedNode || 'SCANNING...'}</div>
+            <div className="text-cyan-300">TOTAL RECORDS: {tablesData.reduce((sum, table) => sum + table.recordCount, 0)}</div>
           </div>
         </div>
 
@@ -324,16 +397,31 @@ const TronGame: React.FC = () => {
 
         {/* Right panel - Database Explorer */}
         <div className="absolute top-4 right-4 text-cyan-400 font-mono text-sm pointer-events-auto">
-          <div className="bg-black/50 border border-cyan-400 p-4 backdrop-blur-sm min-w-64">
+          <div className="bg-black/50 border border-cyan-400 p-4 backdrop-blur-sm min-w-64 max-w-96">
             <div className="text-cyan-400 text-lg mb-2">DATABASE EXPLORER</div>
             {nodeData ? (
               <div className="space-y-2">
                 <div className="text-yellow-400 text-base font-bold">{nodeData.tableName.toUpperCase()}</div>
                 <div className="text-cyan-300">Records: {nodeData.recordCount.toLocaleString()}</div>
                 <div className="text-cyan-300">Updated: {nodeData.lastUpdated}</div>
-                <div className="text-green-400 mt-3 text-xs">
-                  TABLE ACCESSED
-                </div>
+                
+                {nodeData.sampleData && nodeData.sampleData.length > 0 && (
+                  <div className="mt-3">
+                    <div className="text-green-400 text-xs mb-2">SAMPLE DATA:</div>
+                    <div className="max-h-32 overflow-y-auto text-xs">
+                      {nodeData.sampleData.slice(0, 3).map((record, index) => (
+                        <div key={index} className="mb-2 p-2 bg-black/30 border border-gray-600">
+                          {Object.entries(record).slice(0, 3).map(([key, value]) => (
+                            <div key={key} className="text-gray-300">
+                              <span className="text-cyan-400">{key}:</span> {String(value).substring(0, 30)}
+                            </div>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
                 <button 
                   onClick={() => {
                     setSelectedNode(null);
