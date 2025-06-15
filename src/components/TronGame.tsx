@@ -1,5 +1,5 @@
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 
 const TronGame: React.FC = () => {
@@ -8,6 +8,11 @@ const TronGame: React.FC = () => {
   const rendererRef = useRef<THREE.WebGLRenderer>();
   const cameraRef = useRef<THREE.PerspectiveCamera>();
   const animationIdRef = useRef<number>();
+  const raycasterRef = useRef<THREE.Raycaster>();
+  const mouseRef = useRef<THREE.Vector2>();
+  
+  const [selectedNode, setSelectedNode] = useState<string | null>(null);
+  const [nodeData, setNodeData] = useState<any>(null);
 
   useEffect(() => {
     if (!mountRef.current) return;
@@ -37,6 +42,12 @@ const TronGame: React.FC = () => {
     rendererRef.current = renderer;
     mountRef.current.appendChild(renderer.domElement);
 
+    // Raycaster for mouse interactions
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+    raycasterRef.current = raycaster;
+    mouseRef.current = mouse;
+
     // Create Tron-style grid floor
     const createGrid = () => {
       const gridGroup = new THREE.Group();
@@ -58,6 +69,9 @@ const TronGame: React.FC = () => {
       scene.add(gridGroup);
     };
 
+    // Mock database tables data
+    const tableNames = ['users', 'posts', 'comments', 'orders', 'products', 'categories', 'sessions', 'logs', 'profiles', 'messages', 'files', 'settings', 'tokens', 'analytics', 'notifications'];
+
     // Create Tron-style cubes/data nodes
     const createDataNodes = () => {
       const geometry = new THREE.BoxGeometry(2, 2, 2);
@@ -78,11 +92,14 @@ const TronGame: React.FC = () => {
         cube.position.y = 1 + Math.random() * 8;
         cube.position.z = (Math.random() - 0.5) * 80;
         
-        // Add rotation animation data
+        // Add table data and animation data
         cube.userData = {
-          rotationSpeed: 0.01 + Math.random() * 0.02,
-          floatSpeed: 0.02 + Math.random() * 0.03,
-          originalY: cube.position.y
+          rotationSpeed: 0.005 + Math.random() * 0.01, // Reduced rotation speed
+          floatSpeed: 0.001 + Math.random() * 0.002, // Reduced float speed
+          originalY: cube.position.y,
+          tableName: tableNames[i] || `table_${i}`,
+          recordCount: Math.floor(Math.random() * 10000) + 100,
+          lastUpdated: new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
         };
 
         scene.add(cube);
@@ -113,14 +130,46 @@ const TronGame: React.FC = () => {
       scene.add(light2);
     };
 
-    // Camera controls
+    // Camera controls with reduced sensitivity
     let mouseX = 0;
     let mouseY = 0;
-    const mouseSensitivity = 0.0005;
+    const mouseSensitivity = 0.0001; // Reduced from 0.0005 to 0.0001
 
     const handleMouseMove = (event: MouseEvent) => {
       mouseX = (event.clientX - window.innerWidth / 2) * mouseSensitivity;
       mouseY = (event.clientY - window.innerHeight / 2) * mouseSensitivity;
+    };
+
+    const handleClick = (event: MouseEvent) => {
+      // Calculate mouse position in normalized device coordinates
+      mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+      mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+      // Update the picking ray with the camera and mouse position
+      raycaster.setFromCamera(mouse, camera);
+
+      // Calculate objects intersecting the picking ray
+      const intersects = raycaster.intersectObjects(scene.children.filter(child => child instanceof THREE.Mesh && child.userData.tableName));
+
+      if (intersects.length > 0) {
+        const clickedObject = intersects[0].object;
+        const tableData = clickedObject.userData;
+        
+        setSelectedNode(tableData.tableName);
+        setNodeData(tableData);
+        
+        // Visual feedback - make the clicked cube glow brighter
+        scene.children.forEach((child) => {
+          if (child instanceof THREE.Mesh && child.userData.tableName) {
+            if (child === clickedObject) {
+              (child.material as THREE.MeshPhongMaterial).emissive.setHex(0x006666);
+            } else {
+              const originalColor = Math.random() > 0.5 ? 0x004444 : 0x440022;
+              (child.material as THREE.MeshPhongMaterial).emissive.setHex(originalColor);
+            }
+          }
+        });
+      }
     };
 
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -156,24 +205,24 @@ const TronGame: React.FC = () => {
     const animate = () => {
       animationIdRef.current = requestAnimationFrame(animate);
 
-      // Update camera rotation based on mouse
+      // Update camera rotation based on mouse with smoother damping
       camera.rotation.y += mouseX;
       camera.rotation.x += mouseY;
       
-      // Damping
-      mouseX *= 0.95;
-      mouseY *= 0.95;
+      // Stronger damping for smoother movement
+      mouseX *= 0.9; // Increased from 0.95 to 0.9
+      mouseY *= 0.9;
 
-      // Animate data nodes
+      // Animate data nodes with reduced movement
       scene.children.forEach((child) => {
         if (child instanceof THREE.Mesh && child.userData.rotationSpeed) {
           child.rotation.x += child.userData.rotationSpeed;
           child.rotation.y += child.userData.rotationSpeed * 0.5;
           child.rotation.z += child.userData.rotationSpeed * 0.3;
           
-          // Floating animation
+          // Reduced floating animation
           child.position.y = child.userData.originalY + 
-            Math.sin(Date.now() * child.userData.floatSpeed) * 2;
+            Math.sin(Date.now() * child.userData.floatSpeed) * 0.5; // Reduced from 2 to 0.5
         }
       });
 
@@ -195,6 +244,7 @@ const TronGame: React.FC = () => {
 
     // Event listeners
     window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('click', handleClick);
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('resize', handleResize);
 
@@ -204,6 +254,7 @@ const TronGame: React.FC = () => {
         cancelAnimationFrame(animationIdRef.current);
       }
       window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('click', handleClick);
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('resize', handleResize);
       
@@ -225,7 +276,7 @@ const TronGame: React.FC = () => {
           <div className="bg-black/50 border border-cyan-400 p-4 backdrop-blur-sm">
             <div className="text-cyan-400 text-lg mb-2">TRON DATABASE INTERFACE</div>
             <div className="text-cyan-300">STATUS: CONNECTED</div>
-            <div className="text-cyan-300">NODES: SCANNING...</div>
+            <div className="text-cyan-300">NODES: {selectedNode ? 'SELECTED' : 'SCANNING...'}</div>
             <div className="text-cyan-300">USER: GUEST</div>
           </div>
         </div>
@@ -240,11 +291,31 @@ const TronGame: React.FC = () => {
           </div>
         </div>
 
-        {/* Right panel placeholder */}
+        {/* Right panel - Database Explorer */}
         <div className="absolute top-4 right-4 text-cyan-400 font-mono text-sm pointer-events-auto">
-          <div className="bg-black/50 border border-cyan-400 p-4 backdrop-blur-sm">
+          <div className="bg-black/50 border border-cyan-400 p-4 backdrop-blur-sm min-w-64">
             <div className="text-cyan-400 text-lg mb-2">DATABASE EXPLORER</div>
-            <div className="text-gray-400">Connect to view tables...</div>
+            {nodeData ? (
+              <div className="space-y-2">
+                <div className="text-yellow-400 text-base font-bold">{nodeData.tableName.toUpperCase()}</div>
+                <div className="text-cyan-300">Records: {nodeData.recordCount.toLocaleString()}</div>
+                <div className="text-cyan-300">Updated: {nodeData.lastUpdated}</div>
+                <div className="text-green-400 mt-3 text-xs">
+                  TABLE ACCESSED
+                </div>
+                <button 
+                  onClick={() => {
+                    setSelectedNode(null);
+                    setNodeData(null);
+                  }}
+                  className="mt-3 px-3 py-1 border border-cyan-400 text-cyan-400 hover:bg-cyan-400 hover:text-black transition-colors text-xs"
+                >
+                  DISCONNECT
+                </button>
+              </div>
+            ) : (
+              <div className="text-gray-400">Click a data node to explore...</div>
+            )}
           </div>
         </div>
       </div>
