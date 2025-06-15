@@ -1,5 +1,6 @@
 
 # TRON Database Interface
+<img width="1082" alt="Screenshot 2025-06-15 at 11 02 46 AM" src="https://github.com/user-attachments/assets/07de4cd1-8c5e-43b6-a5fd-d284d2d89396" />
 
 Welcome to your TRON-inspired 3D Database Interface! This application provides a unique, immersive way to visualize and interact with your database.
 
