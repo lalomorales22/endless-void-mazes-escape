@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -40,6 +40,20 @@ export const TableCreateDialog: React.FC<TableCreateDialogProps> = ({
   const [aiPrompt, setAiPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const { toast } = useToast();
+
+  useEffect(() => {
+    if (isOpen) {
+      const savedKey = localStorage.getItem('anthropicApiKey');
+      if (savedKey) {
+        setAnthropicKey(savedKey);
+      }
+    }
+  }, [isOpen]);
+
+  const handleApiKeyChange = (key: string) => {
+    setAnthropicKey(key);
+    localStorage.setItem('anthropicApiKey', key);
+  }
 
   const fieldTypes = [
     'text',
@@ -107,7 +121,7 @@ export const TableCreateDialog: React.FC<TableCreateDialogProps> = ({
           'anthropic-version': '2023-06-01'
         },
         body: JSON.stringify({
-          model: 'claude-3-5-sonnet-20241022',
+          model: 'claude-3-opus-20240229',
           max_tokens: 1000,
           messages: [{
             role: 'user',
@@ -128,11 +142,13 @@ Make the response valid JSON without any markdown formatting.`
         })
       });
 
+      const data = await response.json();
       if (!response.ok) {
-        throw new Error(`API request failed: ${response.statusText}`);
+        const errorBody = data;
+        console.error('Anthropic API Error:', errorBody);
+        throw new Error(`API request failed: ${response.statusText} - ${errorBody?.error?.message || 'Unknown error'}`);
       }
 
-      const data = await response.json();
       const content = data.content[0].text;
       
       // Parse the AI response
@@ -181,27 +197,24 @@ Make the response valid JSON without any markdown formatting.`
 
     try {
       const sql = generateSQL();
-      
-      // The application was trying to call a database function `exec_sql` that doesn't exist, causing a build error.
-      // To fix this, I've temporarily disabled the direct database call.
-      // The generated SQL to create the table will be logged to the browser's console.
-      // You can copy this SQL and run it in the Supabase SQL Editor.
-      // In our next step, I can add the `exec_sql` function for you so this process is automatic.
-      
-      console.log('Generated SQL for manual execution:', sql);
+      const { error } = await supabase.rpc('exec_sql', { sql_query: sql });
+
+      if (error) {
+        throw error;
+      }
       
       toast({
-        title: "SQL Generated",
-        description: `SQL for table "${tableName}" is in the console. Run it in the Supabase SQL Editor.`,
+        title: "Table Created",
+        description: `Table "${tableName}" was successfully created.`,
       });
       
       onClose();
       onRefresh();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error during table creation:', error);
       toast({
-        title: "Error",
-        description: "An unexpected error occurred. Check the console for details.",
+        title: "Error Creating Table",
+        description: error.message || "An unexpected error occurred. Check the console for details.",
         variant: "destructive"
       });
     } finally {
@@ -256,7 +269,7 @@ Make the response valid JSON without any markdown formatting.`
                 <input
                   type="password"
                   value={anthropicKey}
-                  onChange={(e) => setAnthropicKey(e.target.value)}
+                  onChange={(e) => handleApiKeyChange(e.target.value)}
                   placeholder="sk-ant-..."
                   className="w-full p-3 bg-gray-800 border border-purple-400 rounded text-purple-300 font-mono"
                 />
