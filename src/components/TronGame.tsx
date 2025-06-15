@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 
@@ -130,17 +129,50 @@ const TronGame: React.FC = () => {
       scene.add(light2);
     };
 
-    // Camera controls with reduced sensitivity
-    let mouseX = 0;
-    let mouseY = 0;
-    const mouseSensitivity = 0.0001; // Reduced from 0.0005 to 0.0001
+    // Simplified camera controls
+    let cameraAngleY = 0; // Only track Y rotation (left/right)
+    let isMouseDown = false;
+    let lastMouseX = 0;
+
+    const handleMouseDown = (event: MouseEvent) => {
+      isMouseDown = true;
+      lastMouseX = event.clientX;
+    };
+
+    const handleMouseUp = () => {
+      isMouseDown = false;
+    };
 
     const handleMouseMove = (event: MouseEvent) => {
-      mouseX = (event.clientX - window.innerWidth / 2) * mouseSensitivity;
-      mouseY = (event.clientY - window.innerHeight / 2) * mouseSensitivity;
+      if (isMouseDown) {
+        const deltaX = event.clientX - lastMouseX;
+        cameraAngleY -= deltaX * 0.01; // Only rotate left/right
+        lastMouseX = event.clientX;
+        
+        // Update camera position based on angle
+        const radius = 40;
+        camera.position.x = Math.sin(cameraAngleY) * radius;
+        camera.position.z = Math.cos(cameraAngleY) * radius;
+        camera.lookAt(0, 0, 0);
+      }
+    };
+
+    const handleWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      const zoomSpeed = 2;
+      const currentRadius = Math.sqrt(camera.position.x ** 2 + camera.position.z ** 2);
+      const newRadius = Math.max(10, Math.min(100, currentRadius + event.deltaY * 0.1));
+      
+      // Maintain the Y rotation angle while zooming
+      camera.position.x = Math.sin(cameraAngleY) * newRadius;
+      camera.position.z = Math.cos(cameraAngleY) * newRadius;
+      camera.lookAt(0, 0, 0);
     };
 
     const handleClick = (event: MouseEvent) => {
+      // Don't process clicks if we were dragging
+      if (isMouseDown) return;
+      
       // Calculate mouse position in normalized device coordinates
       mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
       mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
@@ -177,41 +209,34 @@ const TronGame: React.FC = () => {
       switch (event.code) {
         case 'KeyW':
         case 'ArrowUp':
-          camera.position.z -= speed;
+          camera.position.y += speed;
           break;
         case 'KeyS':
         case 'ArrowDown':
-          camera.position.z += speed;
+          camera.position.y -= speed;
           break;
         case 'KeyA':
         case 'ArrowLeft':
-          camera.position.x -= speed;
+          cameraAngleY += 0.1;
           break;
         case 'KeyD':
         case 'ArrowRight':
-          camera.position.x += speed;
+          cameraAngleY -= 0.1;
           break;
-        case 'Space':
-          event.preventDefault();
-          camera.position.y += speed;
-          break;
-        case 'ShiftLeft':
-          camera.position.y -= speed;
-          break;
+      }
+      
+      // Update camera position for keyboard rotation
+      if (event.code === 'KeyA' || event.code === 'ArrowLeft' || event.code === 'KeyD' || event.code === 'ArrowRight') {
+        const currentRadius = Math.sqrt(camera.position.x ** 2 + camera.position.z ** 2);
+        camera.position.x = Math.sin(cameraAngleY) * currentRadius;
+        camera.position.z = Math.cos(cameraAngleY) * currentRadius;
+        camera.lookAt(0, 0, 0);
       }
     };
 
     // Animation loop
     const animate = () => {
       animationIdRef.current = requestAnimationFrame(animate);
-
-      // Update camera rotation based on mouse with smoother damping
-      camera.rotation.y += mouseX;
-      camera.rotation.x += mouseY;
-      
-      // Stronger damping for smoother movement
-      mouseX *= 0.9; // Increased from 0.95 to 0.9
-      mouseY *= 0.9;
 
       // Animate data nodes with reduced movement
       scene.children.forEach((child) => {
@@ -243,7 +268,10 @@ const TronGame: React.FC = () => {
     animate();
 
     // Event listeners
+    window.addEventListener('mousedown', handleMouseDown);
+    window.addEventListener('mouseup', handleMouseUp);
     window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('wheel', handleWheel);
     window.addEventListener('click', handleClick);
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('resize', handleResize);
@@ -253,7 +281,10 @@ const TronGame: React.FC = () => {
       if (animationIdRef.current) {
         cancelAnimationFrame(animationIdRef.current);
       }
+      window.removeEventListener('mousedown', handleMouseDown);
+      window.removeEventListener('mouseup', handleMouseUp);
       window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('wheel', handleWheel);
       window.removeEventListener('click', handleClick);
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('resize', handleResize);
@@ -285,8 +316,8 @@ const TronGame: React.FC = () => {
         <div className="absolute bottom-4 left-4 text-cyan-400 font-mono text-xs pointer-events-auto">
           <div className="bg-black/50 border border-cyan-400 p-3 backdrop-blur-sm">
             <div>WASD/ARROWS: NAVIGATE</div>
-            <div>SPACE: UP | SHIFT: DOWN</div>
-            <div>MOUSE: LOOK AROUND</div>
+            <div>MOUSE DRAG: ROTATE LEFT/RIGHT</div>
+            <div>SCROLL: ZOOM IN/OUT</div>
             <div className="mt-2 text-yellow-400">CLICK NODES TO ACCESS DATA</div>
           </div>
         </div>
