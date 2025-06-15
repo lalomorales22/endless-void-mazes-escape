@@ -29,6 +29,8 @@ const TronGame: React.FC = () => {
   const cameraRef = useRef<THREE.PerspectiveCamera>();
   const animationIdRef = useRef<number>();
   const buildingsRef = useRef<DatabaseBuilding[]>([]);
+  const raycasterRef = useRef<THREE.Raycaster>(new THREE.Raycaster());
+  const mouseRef = useRef<THREE.Vector2>(new THREE.Vector2());
   
   const [selectedTable, setSelectedTable] = useState<string | null>(null);
   const [selectedRecord, setSelectedRecord] = useState<SelectedRecord | null>(null);
@@ -91,6 +93,43 @@ const TronGame: React.FC = () => {
     setSelectedRecord({ tableId, recordId, data });
   };
 
+  const handleTableSelect = (tableName: string) => {
+    setSelectedTable(tableName);
+    
+    // Find the building and animate camera to it
+    const building = buildingsRef.current.find(b => b.getTableName() === tableName);
+    if (building && cameraRef.current) {
+      const position = building.getPosition();
+      
+      // Animate camera to focus on the selected building
+      const targetPosition = new THREE.Vector3(
+        position.x + 30,
+        position.y + 20,
+        position.z + 30
+      );
+      
+      // Smooth camera transition
+      const startPosition = cameraRef.current.position.clone();
+      const startTime = Date.now();
+      const duration = 2000; // 2 seconds
+      
+      const animateCamera = () => {
+        const elapsed = Date.now() - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        const easeProgress = 1 - Math.pow(1 - progress, 3); // Ease out cubic
+        
+        cameraRef.current!.position.lerpVectors(startPosition, targetPosition, easeProgress);
+        cameraRef.current!.lookAt(position.x, position.y + 10, position.z);
+        
+        if (progress < 1) {
+          requestAnimationFrame(animateCamera);
+        }
+      };
+      
+      animateCamera();
+    }
+  };
+
   const handleRecordUpdate = async (tableId: string, recordId: string, updatedData: any) => {
     try {
       const { error } = await supabase
@@ -141,6 +180,40 @@ const TronGame: React.FC = () => {
         title: "Delete Failed",
         description: "Failed to delete database record",
         variant: "destructive"
+      });
+    }
+  };
+
+  // Handle mouse clicks for object interaction
+  const handleMouseClick = (event: MouseEvent) => {
+    if (!cameraRef.current || !sceneRef.current) return;
+
+    // Calculate mouse position in normalized device coordinates
+    const rect = (event.target as HTMLElement).getBoundingClientRect();
+    mouseRef.current.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    mouseRef.current.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+    // Update the raycaster
+    raycasterRef.current.setFromCamera(mouseRef.current, cameraRef.current);
+
+    // Get all intersectable objects from buildings
+    const intersectableObjects: THREE.Object3D[] = [];
+    buildingsRef.current.forEach(building => {
+      intersectableObjects.push(...building.getIntersectableObjects());
+    });
+
+    // Calculate objects intersecting the picking ray
+    const intersects = raycasterRef.current.intersectObjects(intersectableObjects);
+
+    if (intersects.length > 0) {
+      const clickedObject = intersects[0].object;
+      
+      // Find which building this object belongs to and handle the click
+      buildingsRef.current.forEach(building => {
+        const buildingObjects = building.getIntersectableObjects();
+        if (buildingObjects.includes(clickedObject)) {
+          building.handleClick(clickedObject);
+        }
       });
     }
   };
@@ -273,7 +346,11 @@ const TronGame: React.FC = () => {
       lastMouseY = event.clientY;
     };
 
-    const handleMouseUp = () => {
+    const handleMouseUp = (event: MouseEvent) => {
+      if (!isMouseDown) {
+        // Only trigger click if not dragging
+        handleMouseClick(event);
+      }
       isMouseDown = false;
     };
 
@@ -410,6 +487,7 @@ const TronGame: React.FC = () => {
         selectedTable={selectedTable}
         onCreateTable={() => setShowCreateTable(true)}
         onRefresh={fetchTableData}
+        onTableSelect={handleTableSelect}
       />
 
       {selectedRecord && (

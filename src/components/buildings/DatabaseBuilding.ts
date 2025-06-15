@@ -212,6 +212,14 @@ export class DatabaseBuilding {
   public handleClick(intersectedObject: THREE.Object3D) {
     const block = this.recordBlocks.find(b => b === intersectedObject);
     if (block && block.userData.record) {
+      // Add visual feedback for click
+      const originalScale = block.scale.clone();
+      block.scale.multiplyScalar(1.2);
+      
+      setTimeout(() => {
+        block.scale.copy(originalScale);
+      }, 200);
+      
       this.onRecordClick(
         block.userData.tableId,
         block.userData.recordId,
@@ -230,7 +238,11 @@ export class DatabaseBuilding {
     // Animate record blocks
     this.recordBlocks.forEach((block, index) => {
       block.rotation.y = time * 0.5 + index * 0.1;
-      block.position.y += Math.sin(time * 2 + index) * 0.01;
+      
+      // Gentle floating animation
+      const baseY = block.userData.baseY || block.position.y;
+      block.userData.baseY = baseY;
+      block.position.y = baseY + Math.sin(time * 2 + index) * 0.3;
     });
   }
 
@@ -240,5 +252,13 @@ export class DatabaseBuilding {
 
   public getIntersectableObjects(): THREE.Object3D[] {
     return this.recordBlocks;
+  }
+
+  public getTableName(): string {
+    return this.tableData.tableName;
+  }
+
+  public getPosition(): THREE.Vector3 {
+    return this.group.position;
   }
 }

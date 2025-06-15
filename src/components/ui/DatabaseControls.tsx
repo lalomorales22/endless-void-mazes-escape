@@ -14,13 +14,15 @@ interface DatabaseControlsProps {
   selectedTable: string | null;
   onCreateTable: () => void;
   onRefresh: () => void;
+  onTableSelect: (tableName: string) => void;
 }
 
 export const DatabaseControls: React.FC<DatabaseControlsProps> = ({
   tablesData,
   selectedTable,
   onCreateTable,
-  onRefresh
+  onRefresh,
+  onTableSelect
 }) => {
   return (
     <div className="absolute top-0 left-0 w-full h-full pointer-events-none">
@@ -70,6 +72,7 @@ export const DatabaseControls: React.FC<DatabaseControlsProps> = ({
             <div>SCROLL: ZOOM IN/OUT</div>
             <div>SPACE: CREATE NEW TABLE</div>
             <div className="mt-2 text-yellow-400">CLICK DATA BLOCKS TO EDIT</div>
+            <div className="text-green-400">CLICK BUILDINGS TO NAVIGATE</div>
           </div>
         </div>
       </div>
@@ -82,10 +85,11 @@ export const DatabaseControls: React.FC<DatabaseControlsProps> = ({
             {tablesData.map((table) => (
               <div 
                 key={table.tableName}
-                className={`p-3 border rounded transition-colors ${
+                onClick={() => onTableSelect(table.tableName)}
+                className={`p-3 border rounded transition-all cursor-pointer transform hover:scale-105 ${
                   selectedTable === table.tableName 
-                    ? 'border-yellow-400 bg-yellow-400/10' 
-                    : 'border-gray-600 hover:border-cyan-400'
+                    ? 'border-yellow-400 bg-yellow-400/20 shadow-lg shadow-yellow-400/20' 
+                    : 'border-gray-600 hover:border-cyan-400 hover:bg-cyan-400/10'
                 }`}
               >
                 <div className="text-cyan-300 font-bold">{table.tableName.toUpperCase()}</div>
@@ -94,6 +98,9 @@ export const DatabaseControls: React.FC<DatabaseControlsProps> = ({
                 </div>
                 <div className="text-xs text-gray-500">
                   Updated: {table.lastUpdated}
+                </div>
+                <div className="text-xs text-green-400 mt-1">
+                  → Click to navigate
                 </div>
               </div>
             ))}
