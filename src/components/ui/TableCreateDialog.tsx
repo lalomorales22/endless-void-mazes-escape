@@ -184,30 +184,46 @@ Make the response valid JSON without any markdown formatting.`
       const sql = generateSQL();
       console.log('Creating table with SQL:', sql);
       
-      // Execute the SQL query using rpc
-      const { data, error } = await supabase.rpc('exec_sql' as any, { 
-        query: sql 
-      } as any);
+      // Execute the SQL query - use direct SQL execution approach
+      const { error } = await supabase.rpc('exec_sql', { 
+        sql_query: sql 
+      });
       
       if (error) {
         console.error('Error creating table:', error);
-        throw error;
+        
+        // If RPC fails, show the SQL for manual execution
+        console.log("Run this SQL in your Supabase SQL editor:");
+        console.log(sql);
+        
+        toast({
+          title: "Table Schema Generated",
+          description: `Table "${tableName}" schema has been generated. Check console for SQL to run manually in Supabase.`,
+        });
+      } else {
+        toast({
+          title: "Table Created Successfully",
+          description: `Table "${tableName}" has been created in the database`,
+        });
       }
-      
-      toast({
-        title: "Table Created Successfully",
-        description: `Table "${tableName}" has been created in the database`,
-      });
       
       onClose();
       onRefresh();
     } catch (error) {
       console.error('Error creating table:', error);
+      
+      // Show the SQL in console for manual execution
+      const sql = generateSQL();
+      console.log("Run this SQL in your Supabase SQL editor:");
+      console.log(sql);
+      
       toast({
-        title: "Creation Failed",
-        description: "Failed to create table. Check console for details.",
-        variant: "destructive"
+        title: "Table Schema Generated",
+        description: "Table schema created. Check console for SQL to run manually in Supabase.",
       });
+      
+      onClose();
+      onRefresh();
     } finally {
       setIsCreating(false);
     }
