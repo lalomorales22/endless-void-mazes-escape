@@ -1,4 +1,3 @@
-
 import * as THREE from 'three';
 
 interface TableData {
@@ -89,60 +88,67 @@ export class DatabaseBuilding {
   private createDataBlocks() {
     if (!this.tableData.sampleData) return;
 
-    const recordsPerFloor = 6;
-    const floorHeight = 4;
-    const blockSize = 1.5;
+    const recordsPerFloor = 4; // Reduced to fit better inside
+    const floorHeight = 3.5; // Slightly reduced spacing
+    const blockSize = 1.2; // Slightly smaller blocks
+    const buildingWidth = 12; // Inner building dimensions (smaller than outer 15)
     
     this.tableData.sampleData.forEach((record, index) => {
       const floor = Math.floor(index / recordsPerFloor);
       const positionOnFloor = index % recordsPerFloor;
       
-      // Position blocks in a 3x2 grid per floor
-      const gridX = (positionOnFloor % 3) - 1;
-      const gridZ = Math.floor(positionOnFloor / 3) - 0.5;
+      // Position blocks in a 2x2 grid per floor, centered inside the building
+      const gridX = (positionOnFloor % 2) - 0.5; // -0.5 or 0.5
+      const gridZ = Math.floor(positionOnFloor / 2) - 0.5; // -0.5 or 0.5
       
       const blockGeometry = new THREE.BoxGeometry(blockSize, blockSize, blockSize);
       const blockMaterial = new THREE.MeshPhongMaterial({
         color: this.getBlockColor(record),
         emissive: this.getBlockColor(record),
-        emissiveIntensity: 0.2,
+        emissiveIntensity: 0.3,
         transparent: true,
-        opacity: 0.8
+        opacity: 0.9
       });
 
       const block = new THREE.Mesh(blockGeometry, blockMaterial);
+      
+      // Position blocks inside the building bounds
       block.position.set(
-        gridX * 3,
-        floorHeight + (floor * floorHeight) + blockSize/2,
-        gridZ * 3
+        gridX * 4, // Spread blocks across building width
+        floorHeight + (floor * floorHeight) + blockSize/2 + 2, // Start above base
+        gridZ * 4 // Spread blocks across building depth
       );
       
-      // Add hover effect
+      // Add hover effect and click data
       block.userData = {
         originalColor: this.getBlockColor(record),
+        originalEmissive: this.getBlockColor(record),
         record: record,
         tableId: this.tableData.tableName,
-        recordId: record.id
+        recordId: record.id || index.toString()
       };
 
       block.castShadow = true;
       this.recordBlocks.push(block);
       this.group.add(block);
 
-      // Add connection lines between floors
-      if (floor > 0) {
-        const lineMaterial = new THREE.LineBasicMaterial({ 
-          color: 0x00ffff, 
-          transparent: true, 
-          opacity: 0.3 
-        });
-        const points = [
-          new THREE.Vector3(gridX * 3, block.position.y - floorHeight, gridZ * 3),
-          new THREE.Vector3(gridX * 3, block.position.y, gridZ * 3)
-        ];
-        const lineGeometry = new THREE.BufferGeometry().setFromPoints(points);
-        const line = new THREE.Line(lineGeometry, lineMaterial);
-        this.group.add(line);
+      // Add subtle connection lines between blocks on the same floor
+      if (positionOnFloor > 0) {
+        const prevBlock = this.recordBlocks[index - 1];
+        if (prevBlock && Math.floor((index - 1) / recordsPerFloor) === floor) {
+          const lineMaterial = new THREE.LineBasicMaterial({ 
+            color: this.getBuildingColor(), 
+            transparent: true, 
+            opacity: 0.2 
+          });
+          const points = [
+            new THREE.Vector3(prevBlock.position.x, prevBlock.position.y, prevBlock.position.z),
+            new THREE.Vector3(block.position.x, block.position.y, block.position.z)
+          ];
+          const lineGeometry = new THREE.BufferGeometry().setFromPoints(points);
+          const line = new THREE.Line(lineGeometry, lineMaterial);
+          this.group.add(line);
+        }
       }
     });
   }
@@ -212,14 +218,20 @@ export class DatabaseBuilding {
   public handleClick(intersectedObject: THREE.Object3D) {
     const block = this.recordBlocks.find(b => b === intersectedObject);
     if (block && block.userData.record) {
-      // Add visual feedback for click
+      // Enhanced visual feedback for click
       const originalScale = block.scale.clone();
-      block.scale.multiplyScalar(1.2);
+      const originalEmissive = block.material.emissiveIntensity;
+      
+      // Scale and brightness effect
+      block.scale.multiplyScalar(1.3);
+      block.material.emissiveIntensity = 0.8;
       
       setTimeout(() => {
         block.scale.copy(originalScale);
-      }, 200);
+        block.material.emissiveIntensity = originalEmissive;
+      }, 300);
       
+      // Call the record click handler to open the edit dialog
       this.onRecordClick(
         block.userData.tableId,
         block.userData.recordId,
@@ -233,16 +245,20 @@ export class DatabaseBuilding {
     const time = Date.now() * 0.001;
     
     // Gentle building sway
-    this.group.rotation.y = Math.sin(time * 0.5) * 0.01;
+    this.group.rotation.y = Math.sin(time * 0.5) * 0.005; // Reduced sway
     
-    // Animate record blocks
+    // Animate record blocks with more subtle movement
     this.recordBlocks.forEach((block, index) => {
-      block.rotation.y = time * 0.5 + index * 0.1;
+      block.rotation.y = time * 0.3 + index * 0.1; // Slower rotation
       
-      // Gentle floating animation
+      // More subtle floating animation
       const baseY = block.userData.baseY || block.position.y;
       block.userData.baseY = baseY;
-      block.position.y = baseY + Math.sin(time * 2 + index) * 0.3;
+      block.position.y = baseY + Math.sin(time * 1.5 + index) * 0.2; // Smaller amplitude
+      
+      // Add gentle pulsing to emissive intensity
+      const baseIntensity = 0.3;
+      block.material.emissiveIntensity = baseIntensity + Math.sin(time * 2 + index) * 0.1;
     });
   }
 
