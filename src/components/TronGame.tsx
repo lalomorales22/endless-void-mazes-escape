@@ -3,6 +3,10 @@ import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { DatabaseBuilding } from './buildings/DatabaseBuilding';
+import { DatabaseControls } from './ui/DatabaseControls';
+import { RecordEditDialog } from './ui/RecordEditDialog';
+import { TableCreateDialog } from './ui/TableCreateDialog';
 
 interface TableData {
   tableName: string;
@@ -12,17 +16,23 @@ interface TableData {
   sampleData?: any[];
 }
 
+interface SelectedRecord {
+  tableId: string;
+  recordId: string;
+  data: any;
+}
+
 const TronGame: React.FC = () => {
   const mountRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<THREE.Scene>();
   const rendererRef = useRef<THREE.WebGLRenderer>();
   const cameraRef = useRef<THREE.PerspectiveCamera>();
   const animationIdRef = useRef<number>();
-  const raycasterRef = useRef<THREE.Raycaster>();
-  const mouseRef = useRef<THREE.Vector2>();
+  const buildingsRef = useRef<DatabaseBuilding[]>([]);
   
-  const [selectedNode, setSelectedNode] = useState<string | null>(null);
-  const [nodeData, setNodeData] = useState<TableData | null>(null);
+  const [selectedTable, setSelectedTable] = useState<string | null>(null);
+  const [selectedRecord, setSelectedRecord] = useState<SelectedRecord | null>(null);
+  const [showCreateTable, setShowCreateTable] = useState(false);
   const [tablesData, setTablesData] = useState<TableData[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
@@ -32,14 +42,13 @@ const TronGame: React.FC = () => {
     try {
       setLoading(true);
       
-      // Define table names as constants to ensure type safety
       const tableQueries = [
-        { name: 'users', query: supabase.from('users').select('*', { count: 'exact', head: false }).limit(5) },
-        { name: 'posts', query: supabase.from('posts').select('*', { count: 'exact', head: false }).limit(5) },
-        { name: 'comments', query: supabase.from('comments').select('*', { count: 'exact', head: false }).limit(5) },
-        { name: 'products', query: supabase.from('products').select('*', { count: 'exact', head: false }).limit(5) },
-        { name: 'orders', query: supabase.from('orders').select('*', { count: 'exact', head: false }).limit(5) },
-        { name: 'analytics', query: supabase.from('analytics').select('*', { count: 'exact', head: false }).limit(5) }
+        { name: 'users', query: supabase.from('users').select('*', { count: 'exact', head: false }).limit(50) },
+        { name: 'posts', query: supabase.from('posts').select('*', { count: 'exact', head: false }).limit(50) },
+        { name: 'comments', query: supabase.from('comments').select('*', { count: 'exact', head: false }).limit(50) },
+        { name: 'products', query: supabase.from('products').select('*', { count: 'exact', head: false }).limit(50) },
+        { name: 'orders', query: supabase.from('orders').select('*', { count: 'exact', head: false }).limit(50) },
+        { name: 'analytics', query: supabase.from('analytics').select('*', { count: 'exact', head: false }).limit(50) }
       ];
 
       const tableDataPromises = tableQueries.map(async ({ name, query }) => {
@@ -78,6 +87,64 @@ const TronGame: React.FC = () => {
     }
   };
 
+  const handleRecordClick = (tableId: string, recordId: string, data: any) => {
+    setSelectedRecord({ tableId, recordId, data });
+  };
+
+  const handleRecordUpdate = async (tableId: string, recordId: string, updatedData: any) => {
+    try {
+      const { error } = await supabase
+        .from(tableId)
+        .update(updatedData)
+        .eq('id', recordId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Record Updated",
+        description: "Database record has been successfully updated",
+      });
+
+      // Refresh data
+      fetchTableData();
+      setSelectedRecord(null);
+    } catch (error) {
+      console.error('Error updating record:', error);
+      toast({
+        title: "Update Failed",
+        description: "Failed to update database record",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleRecordDelete = async (tableId: string, recordId: string) => {
+    try {
+      const { error } = await supabase
+        .from(tableId)
+        .delete()
+        .eq('id', recordId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Record Deleted",
+        description: "Database record has been successfully deleted",
+      });
+
+      // Refresh data
+      fetchTableData();
+      setSelectedRecord(null);
+    } catch (error) {
+      console.error('Error deleting record:', error);
+      toast({
+        title: "Delete Failed",
+        description: "Failed to delete database record",
+        variant: "destructive"
+      });
+    }
+  };
+
   useEffect(() => {
     fetchTableData();
   }, []);
@@ -87,8 +154,8 @@ const TronGame: React.FC = () => {
 
     // Scene setup
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x000000);
-    scene.fog = new THREE.Fog(0x000000, 50, 200);
+    scene.background = new THREE.Color(0x000011);
+    scene.fog = new THREE.Fog(0x000011, 50, 500);
     sceneRef.current = scene;
 
     // Camera setup
@@ -98,7 +165,7 @@ const TronGame: React.FC = () => {
       0.1,
       1000
     );
-    camera.position.set(0, 20, 30);
+    camera.position.set(0, 50, 100);
     camera.lookAt(0, 0, 0);
     cameraRef.current = camera;
 
@@ -107,111 +174,99 @@ const TronGame: React.FC = () => {
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.setClearColor(0x000011);
     rendererRef.current = renderer;
     mountRef.current.appendChild(renderer.domElement);
-
-    // Raycaster for mouse interactions
-    const raycaster = new THREE.Raycaster();
-    const mouse = new THREE.Vector2();
-    raycasterRef.current = raycaster;
-    mouseRef.current = mouse;
 
     // Create Tron-style grid floor
     const createGrid = () => {
       const gridGroup = new THREE.Group();
       
-      // Main grid lines
-      const gridSize = 100;
-      const gridDivisions = 20;
+      // Main grid
+      const gridSize = 200;
+      const gridDivisions = 40;
       const gridHelper = new THREE.GridHelper(gridSize, gridDivisions, 0x00ffff, 0x003366);
       gridHelper.position.y = 0;
       gridGroup.add(gridHelper);
 
+      // Add grid lines that extend upward
+      const lineMaterial = new THREE.LineBasicMaterial({ color: 0x003366, transparent: true, opacity: 0.3 });
+      for (let i = -gridDivisions/2; i <= gridDivisions/2; i += 5) {
+        const points = [
+          new THREE.Vector3(i * (gridSize/gridDivisions), 0, -gridSize/2),
+          new THREE.Vector3(i * (gridSize/gridDivisions), 100, -gridSize/2)
+        ];
+        const geometry = new THREE.BufferGeometry().setFromPoints(points);
+        const line = new THREE.Line(geometry, lineMaterial);
+        gridGroup.add(line);
+      }
+
       scene.add(gridGroup);
     };
 
-    // Create Tron-style cubes/data nodes using real table data
-    const createDataNodes = () => {
-      const geometry = new THREE.BoxGeometry(2, 2, 2);
+    // Create buildings for each table
+    const createBuildings = () => {
+      buildingsRef.current = [];
       
-      tablesData.forEach((tableData, i) => {
-        // Create different colors based on table type
-        let color, emissive;
-        if (tableData.tableName.includes('user')) {
-          color = 0x00ffff; // Cyan for user data
-          emissive = 0x004444;
-        } else if (tableData.tableName.includes('analytics')) {
-          color = 0xff6600; // Orange for analytics
-          emissive = 0x442200;
-        } else if (tableData.tableName.includes('order') || tableData.tableName.includes('product')) {
-          color = 0x00ff66; // Green for commerce
-          emissive = 0x004422;
-        } else {
-          color = 0xff0066; // Pink for content
-          emissive = 0x440022;
-        }
-
-        const material = new THREE.MeshPhongMaterial({
-          color,
-          emissive,
-          transparent: true,
-          opacity: 0.8
-        });
-
-        const cube = new THREE.Mesh(geometry, material);
+      tablesData.forEach((tableData, index) => {
+        const building = new DatabaseBuilding(
+          tableData,
+          index,
+          tablesData.length,
+          handleRecordClick
+        );
         
-        // Position based on record count and table index
-        const angle = (i / tablesData.length) * Math.PI * 2;
-        const radius = 20 + (tableData.recordCount / 100) * 10;
-        
-        cube.position.x = Math.cos(angle) * radius;
-        cube.position.y = 2 + (tableData.recordCount / 50);
-        cube.position.z = Math.sin(angle) * radius;
-        
-        // Add table data and animation data
-        cube.userData = {
-          rotationSpeed: 0.005 + (tableData.recordCount / 10000),
-          floatSpeed: 0.001 + (tableData.recordCount / 50000),
-          originalY: cube.position.y,
-          tableData: tableData
-        };
-
-        scene.add(cube);
+        scene.add(building.getGroup());
+        buildingsRef.current.push(building);
       });
     };
 
     // Lighting setup
     const setupLighting = () => {
       // Ambient light
-      const ambientLight = new THREE.AmbientLight(0x001122, 0.3);
+      const ambientLight = new THREE.AmbientLight(0x001122, 0.4);
       scene.add(ambientLight);
 
       // Main directional light
-      const directionalLight = new THREE.DirectionalLight(0x00ffff, 0.8);
-      directionalLight.position.set(10, 20, 10);
+      const directionalLight = new THREE.DirectionalLight(0x00ffff, 1);
+      directionalLight.position.set(50, 100, 50);
       directionalLight.castShadow = true;
       directionalLight.shadow.mapSize.width = 2048;
       directionalLight.shadow.mapSize.height = 2048;
+      directionalLight.shadow.camera.near = 0.5;
+      directionalLight.shadow.camera.far = 500;
+      directionalLight.shadow.camera.left = -100;
+      directionalLight.shadow.camera.right = 100;
+      directionalLight.shadow.camera.top = 100;
+      directionalLight.shadow.camera.bottom = -100;
       scene.add(directionalLight);
 
       // Accent lights
-      const light1 = new THREE.PointLight(0xff0066, 0.5, 50);
-      light1.position.set(-20, 10, -20);
+      const light1 = new THREE.PointLight(0xff0066, 0.8, 100);
+      light1.position.set(-50, 30, -50);
       scene.add(light1);
 
-      const light2 = new THREE.PointLight(0x00ffff, 0.5, 50);
-      light2.position.set(20, 10, 20);
+      const light2 = new THREE.PointLight(0x00ff66, 0.8, 100);
+      light2.position.set(50, 30, 50);
       scene.add(light2);
+
+      const light3 = new THREE.PointLight(0xffff00, 0.6, 80);
+      light3.position.set(0, 60, 0);
+      scene.add(light3);
     };
 
-    // Simplified camera controls
+    // Mouse and camera controls
     let cameraAngleY = 0;
+    let cameraAngleX = 0;
     let isMouseDown = false;
     let lastMouseX = 0;
+    let lastMouseY = 0;
+    let cameraRadius = 100;
 
     const handleMouseDown = (event: MouseEvent) => {
       isMouseDown = true;
       lastMouseX = event.clientX;
+      lastMouseY = event.clientY;
     };
 
     const handleMouseUp = () => {
@@ -221,63 +276,34 @@ const TronGame: React.FC = () => {
     const handleMouseMove = (event: MouseEvent) => {
       if (isMouseDown) {
         const deltaX = event.clientX - lastMouseX;
-        cameraAngleY -= deltaX * 0.005;
-        lastMouseX = event.clientX;
+        const deltaY = event.clientY - lastMouseY;
         
-        // Update camera position based on angle
-        const radius = Math.sqrt(camera.position.x ** 2 + camera.position.z ** 2);
-        camera.position.x = Math.sin(cameraAngleY) * radius;
-        camera.position.z = Math.cos(cameraAngleY) * radius;
-        camera.lookAt(0, 0, 0);
+        cameraAngleY -= deltaX * 0.005;
+        cameraAngleX = Math.max(-Math.PI/3, Math.min(Math.PI/3, cameraAngleX - deltaY * 0.005));
+        
+        lastMouseX = event.clientX;
+        lastMouseY = event.clientY;
+        
+        // Update camera position
+        camera.position.x = Math.sin(cameraAngleY) * Math.cos(cameraAngleX) * cameraRadius;
+        camera.position.y = Math.sin(cameraAngleX) * cameraRadius + 30;
+        camera.position.z = Math.cos(cameraAngleY) * Math.cos(cameraAngleX) * cameraRadius;
+        camera.lookAt(0, 20, 0);
       }
     };
 
     const handleWheel = (event: WheelEvent) => {
       event.preventDefault();
-      const currentRadius = Math.sqrt(camera.position.x ** 2 + camera.position.z ** 2);
-      const newRadius = Math.max(10, Math.min(100, currentRadius + event.deltaY * 0.1));
+      cameraRadius = Math.max(30, Math.min(200, cameraRadius + event.deltaY * 0.2));
       
-      camera.position.x = Math.sin(cameraAngleY) * newRadius;
-      camera.position.z = Math.cos(cameraAngleY) * newRadius;
-      camera.lookAt(0, 0, 0);
-    };
-
-    const handleClick = (event: MouseEvent) => {
-      if (isMouseDown) return;
-      
-      mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-      mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-
-      raycaster.setFromCamera(mouse, camera);
-      const intersects = raycaster.intersectObjects(scene.children.filter(child => child instanceof THREE.Mesh && child.userData.tableData));
-
-      if (intersects.length > 0) {
-        const clickedObject = intersects[0].object;
-        const tableData = clickedObject.userData.tableData;
-        
-        setSelectedNode(tableData.tableName);
-        setNodeData(tableData);
-        
-        // Visual feedback
-        scene.children.forEach((child) => {
-          if (child instanceof THREE.Mesh && child.userData.tableData) {
-            if (child === clickedObject) {
-              (child.material as THREE.MeshPhongMaterial).emissive.setHex(0x006666);
-            } else {
-              // Reset to original emissive color based on table type
-              const originalEmissive = child.userData.tableData.tableName.includes('user') ? 0x004444 :
-                                     child.userData.tableData.tableName.includes('analytics') ? 0x442200 :
-                                     child.userData.tableData.tableName.includes('order') || child.userData.tableData.tableName.includes('product') ? 0x004422 :
-                                     0x440022;
-              (child.material as THREE.MeshPhongMaterial).emissive.setHex(originalEmissive);
-            }
-          }
-        });
-      }
+      camera.position.x = Math.sin(cameraAngleY) * Math.cos(cameraAngleX) * cameraRadius;
+      camera.position.y = Math.sin(cameraAngleX) * cameraRadius + 30;
+      camera.position.z = Math.cos(cameraAngleY) * Math.cos(cameraAngleX) * cameraRadius;
+      camera.lookAt(0, 20, 0);
     };
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      const speed = 2;
+      const speed = 5;
       switch (event.code) {
         case 'KeyW':
         case 'ArrowUp':
@@ -285,7 +311,7 @@ const TronGame: React.FC = () => {
           break;
         case 'KeyS':
         case 'ArrowDown':
-          camera.position.y -= speed;
+          camera.position.y = Math.max(5, camera.position.y - speed);
           break;
         case 'KeyA':
         case 'ArrowLeft':
@@ -295,13 +321,16 @@ const TronGame: React.FC = () => {
         case 'ArrowRight':
           cameraAngleY -= 0.1;
           break;
+        case 'Space':
+          event.preventDefault();
+          setShowCreateTable(true);
+          break;
       }
       
       if (event.code === 'KeyA' || event.code === 'ArrowLeft' || event.code === 'KeyD' || event.code === 'ArrowRight') {
-        const currentRadius = Math.sqrt(camera.position.x ** 2 + camera.position.z ** 2);
-        camera.position.x = Math.sin(cameraAngleY) * currentRadius;
-        camera.position.z = Math.cos(cameraAngleY) * currentRadius;
-        camera.lookAt(0, 0, 0);
+        camera.position.x = Math.sin(cameraAngleY) * Math.cos(cameraAngleX) * cameraRadius;
+        camera.position.z = Math.cos(cameraAngleY) * Math.cos(cameraAngleX) * cameraRadius;
+        camera.lookAt(0, 20, 0);
       }
     };
 
@@ -309,15 +338,9 @@ const TronGame: React.FC = () => {
     const animate = () => {
       animationIdRef.current = requestAnimationFrame(animate);
 
-      scene.children.forEach((child) => {
-        if (child instanceof THREE.Mesh && child.userData.rotationSpeed) {
-          child.rotation.x += child.userData.rotationSpeed;
-          child.rotation.y += child.userData.rotationSpeed * 0.5;
-          child.rotation.z += child.userData.rotationSpeed * 0.3;
-          
-          child.position.y = child.userData.originalY + 
-            Math.sin(Date.now() * child.userData.floatSpeed) * 0.5;
-        }
+      // Update buildings
+      buildingsRef.current.forEach(building => {
+        building.update();
       });
 
       renderer.render(scene, camera);
@@ -332,7 +355,7 @@ const TronGame: React.FC = () => {
 
     // Initialize scene
     createGrid();
-    createDataNodes();
+    createBuildings();
     setupLighting();
     animate();
 
@@ -341,7 +364,6 @@ const TronGame: React.FC = () => {
     window.addEventListener('mouseup', handleMouseUp);
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('wheel', handleWheel);
-    window.addEventListener('click', handleClick);
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('resize', handleResize);
 
@@ -354,7 +376,6 @@ const TronGame: React.FC = () => {
       window.removeEventListener('mouseup', handleMouseUp);
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('wheel', handleWheel);
-      window.removeEventListener('click', handleClick);
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('resize', handleResize);
       
@@ -368,7 +389,7 @@ const TronGame: React.FC = () => {
   if (loading) {
     return (
       <div className="w-full h-screen bg-black flex items-center justify-center">
-        <div className="text-cyan-400 font-mono text-lg">
+        <div className="text-cyan-400 font-mono text-lg animate-pulse">
           INITIALIZING TRON DATABASE INTERFACE...
         </div>
       </div>
@@ -379,72 +400,30 @@ const TronGame: React.FC = () => {
     <div className="relative">
       <div ref={mountRef} className="w-full h-screen" />
       
-      {/* Tron-style UI overlay */}
-      <div className="absolute top-0 left-0 w-full h-full pointer-events-none">
-        {/* Top HUD */}
-        <div className="absolute top-4 left-4 text-cyan-400 font-mono text-sm pointer-events-auto">
-          <div className="bg-black/50 border border-cyan-400 p-4 backdrop-blur-sm">
-            <div className="text-cyan-400 text-lg mb-2">TRON DATABASE INTERFACE</div>
-            <div className="text-cyan-300">STATUS: CONNECTED</div>
-            <div className="text-cyan-300">TABLES: {tablesData.length} LOADED</div>
-            <div className="text-cyan-300">NODE: {selectedNode || 'SCANNING...'}</div>
-            <div className="text-cyan-300">TOTAL RECORDS: {tablesData.reduce((sum, table) => sum + table.recordCount, 0)}</div>
-          </div>
-        </div>
+      <DatabaseControls 
+        tablesData={tablesData}
+        selectedTable={selectedTable}
+        onCreateTable={() => setShowCreateTable(true)}
+        onRefresh={fetchTableData}
+      />
 
-        {/* Bottom controls */}
-        <div className="absolute bottom-4 left-4 text-cyan-400 font-mono text-xs pointer-events-auto">
-          <div className="bg-black/50 border border-cyan-400 p-3 backdrop-blur-sm">
-            <div>WASD/ARROWS: NAVIGATE</div>
-            <div>MOUSE DRAG: ROTATE LEFT/RIGHT</div>
-            <div>SCROLL: ZOOM IN/OUT</div>
-            <div className="mt-2 text-yellow-400">CLICK NODES TO ACCESS DATA</div>
-          </div>
-        </div>
+      {selectedRecord && (
+        <RecordEditDialog
+          isOpen={!!selectedRecord}
+          onClose={() => setSelectedRecord(null)}
+          record={selectedRecord}
+          onUpdate={handleRecordUpdate}
+          onDelete={handleRecordDelete}
+        />
+      )}
 
-        {/* Right panel - Database Explorer */}
-        <div className="absolute top-4 right-4 text-cyan-400 font-mono text-sm pointer-events-auto">
-          <div className="bg-black/50 border border-cyan-400 p-4 backdrop-blur-sm min-w-64 max-w-96">
-            <div className="text-cyan-400 text-lg mb-2">DATABASE EXPLORER</div>
-            {nodeData ? (
-              <div className="space-y-2">
-                <div className="text-yellow-400 text-base font-bold">{nodeData.tableName.toUpperCase()}</div>
-                <div className="text-cyan-300">Records: {nodeData.recordCount.toLocaleString()}</div>
-                <div className="text-cyan-300">Updated: {nodeData.lastUpdated}</div>
-                
-                {nodeData.sampleData && nodeData.sampleData.length > 0 && (
-                  <div className="mt-3">
-                    <div className="text-green-400 text-xs mb-2">SAMPLE DATA:</div>
-                    <div className="max-h-32 overflow-y-auto text-xs">
-                      {nodeData.sampleData.slice(0, 3).map((record, index) => (
-                        <div key={index} className="mb-2 p-2 bg-black/30 border border-gray-600">
-                          {Object.entries(record).slice(0, 3).map(([key, value]) => (
-                            <div key={key} className="text-gray-300">
-                              <span className="text-cyan-400">{key}:</span> {String(value).substring(0, 30)}
-                            </div>
-                          ))}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                
-                <button 
-                  onClick={() => {
-                    setSelectedNode(null);
-                    setNodeData(null);
-                  }}
-                  className="mt-3 px-3 py-1 border border-cyan-400 text-cyan-400 hover:bg-cyan-400 hover:text-black transition-colors text-xs"
-                >
-                  DISCONNECT
-                </button>
-              </div>
-            ) : (
-              <div className="text-gray-400">Click a data node to explore...</div>
-            )}
-          </div>
-        </div>
-      </div>
+      {showCreateTable && (
+        <TableCreateDialog
+          isOpen={showCreateTable}
+          onClose={() => setShowCreateTable(false)}
+          onRefresh={fetchTableData}
+        />
+      )}
     </div>
   );
 };
