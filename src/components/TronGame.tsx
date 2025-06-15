@@ -31,20 +31,27 @@ const TronGame: React.FC = () => {
   const fetchTableData = async () => {
     try {
       setLoading(true);
-      const tables = ['users', 'posts', 'comments', 'products', 'orders', 'analytics'];
-      const tableDataPromises = tables.map(async (tableName) => {
-        const { data, error, count } = await supabase
-          .from(tableName)
-          .select('*', { count: 'exact', head: false })
-          .limit(5);
+      
+      // Define table names as constants to ensure type safety
+      const tableQueries = [
+        { name: 'users', query: supabase.from('users').select('*', { count: 'exact', head: false }).limit(5) },
+        { name: 'posts', query: supabase.from('posts').select('*', { count: 'exact', head: false }).limit(5) },
+        { name: 'comments', query: supabase.from('comments').select('*', { count: 'exact', head: false }).limit(5) },
+        { name: 'products', query: supabase.from('products').select('*', { count: 'exact', head: false }).limit(5) },
+        { name: 'orders', query: supabase.from('orders').select('*', { count: 'exact', head: false }).limit(5) },
+        { name: 'analytics', query: supabase.from('analytics').select('*', { count: 'exact', head: false }).limit(5) }
+      ];
+
+      const tableDataPromises = tableQueries.map(async ({ name, query }) => {
+        const { data, error, count } = await query;
 
         if (error) {
-          console.error(`Error fetching ${tableName}:`, error);
+          console.error(`Error fetching ${name}:`, error);
           return null;
         }
 
         return {
-          tableName,
+          tableName: name,
           recordCount: count || 0,
           lastUpdated: new Date().toISOString().split('T')[0],
           sampleData: data || []
