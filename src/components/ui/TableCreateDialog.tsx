@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import {
   Dialog,
@@ -183,35 +182,28 @@ Make the response valid JSON without any markdown formatting.`
     try {
       const sql = generateSQL();
       
-      // Execute the SQL directly using Supabase RPC
-      const { error } = await supabase.rpc('exec_sql', { sql_query: sql });
+      // The application was trying to call a database function `exec_sql` that doesn't exist, causing a build error.
+      // To fix this, I've temporarily disabled the direct database call.
+      // The generated SQL to create the table will be logged to the browser's console.
+      // You can copy this SQL and run it in the Supabase SQL Editor.
+      // In our next step, I can add the `exec_sql` function for you so this process is automatic.
       
-      if (error) {
-        throw error;
-      }
+      console.log('Generated SQL for manual execution:', sql);
       
       toast({
-        title: "Table Created Successfully",
-        description: `Table "${tableName}" has been created in your database.`,
+        title: "SQL Generated",
+        description: `SQL for table "${tableName}" is in the console. Run it in the Supabase SQL Editor.`,
       });
       
       onClose();
       onRefresh();
     } catch (error) {
-      console.error('Error creating table:', error);
-      
-      // Fallback to manual SQL generation if RPC fails
-      const sql = generateSQL();
-      console.log('Generated SQL for manual execution:');
-      console.log(sql);
-      
+      console.error('Error during table creation:', error);
       toast({
-        title: "Table Schema Generated",
-        description: `Table "${tableName}" schema has been generated. Check console for SQL to run manually in Supabase SQL Editor.`,
+        title: "Error",
+        description: "An unexpected error occurred. Check the console for details.",
+        variant: "destructive"
       });
-      
-      onClose();
-      onRefresh();
     } finally {
       setIsCreating(false);
     }
