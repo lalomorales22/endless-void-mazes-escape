@@ -10,7 +10,6 @@ import {
 import { Button } from '../ui/button';
 import { Plus, Trash2, Sparkles, Brain, Database } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
 
 interface Field {
   name: string;
@@ -182,48 +181,23 @@ Make the response valid JSON without any markdown formatting.`
 
     try {
       const sql = generateSQL();
-      console.log('Creating table with SQL:', sql);
-      
-      // Execute the SQL query - use direct SQL execution approach
-      const { error } = await supabase.rpc('exec_sql', { 
-        sql_query: sql 
-      });
-      
-      if (error) {
-        console.error('Error creating table:', error);
-        
-        // If RPC fails, show the SQL for manual execution
-        console.log("Run this SQL in your Supabase SQL editor:");
-        console.log(sql);
-        
-        toast({
-          title: "Table Schema Generated",
-          description: `Table "${tableName}" schema has been generated. Check console for SQL to run manually in Supabase.`,
-        });
-      } else {
-        toast({
-          title: "Table Created Successfully",
-          description: `Table "${tableName}" has been created in the database`,
-        });
-      }
-      
-      onClose();
-      onRefresh();
-    } catch (error) {
-      console.error('Error creating table:', error);
-      
-      // Show the SQL in console for manual execution
-      const sql = generateSQL();
-      console.log("Run this SQL in your Supabase SQL editor:");
+      console.log('Generated SQL for manual execution:');
       console.log(sql);
       
       toast({
         title: "Table Schema Generated",
-        description: "Table schema created. Check console for SQL to run manually in Supabase.",
+        description: `Table "${tableName}" schema has been generated. Check console for SQL to run manually in Supabase SQL Editor.`,
       });
       
       onClose();
       onRefresh();
+    } catch (error) {
+      console.error('Error generating table schema:', error);
+      toast({
+        title: "Generation Failed",
+        description: "Failed to generate table schema. Please try again.",
+        variant: "destructive"
+      });
     } finally {
       setIsCreating(false);
     }
@@ -454,7 +428,7 @@ Make the response valid JSON without any markdown formatting.`
             disabled={isCreating || !tableName.trim()}
             className="bg-cyan-600 hover:bg-cyan-700 text-black font-bold"
           >
-            {isCreating ? 'CREATING...' : 'CREATE TABLE'}
+            {isCreating ? 'GENERATING...' : 'GENERATE SQL'}
           </Button>
         </DialogFooter>
       </DialogContent>
