@@ -82,14 +82,4 @@ This project is built with:
 - Three.js for 3D rendering
 - Supabase for the backend and database
 
-## How can I deploy this project?
 
-Simply open [Lovable](https://lovable.dev/projects/38427bc0-010d-40b3-b956-341b812ae2ec) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
