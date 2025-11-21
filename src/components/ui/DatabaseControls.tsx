@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Button } from '../ui/button';
-import { Database, Plus, RotateCcw } from 'lucide-react';
+import { Database, Plus, RotateCcw, Search, BarChart3, Settings, HelpCircle } from 'lucide-react';
 
 interface TableData {
   tableName: string;
@@ -15,6 +15,10 @@ interface DatabaseControlsProps {
   onCreateTable: () => void;
   onRefresh: () => void;
   onTableSelect: (tableName: string) => void;
+  onOpenSearch?: () => void;
+  onOpenAnalytics?: () => void;
+  onOpenSettings?: () => void;
+  onOpenHelp?: () => void;
 }
 
 export const DatabaseControls: React.FC<DatabaseControlsProps> = ({
@@ -22,7 +26,11 @@ export const DatabaseControls: React.FC<DatabaseControlsProps> = ({
   selectedTable,
   onCreateTable,
   onRefresh,
-  onTableSelect
+  onTableSelect,
+  onOpenSearch,
+  onOpenAnalytics,
+  onOpenSettings,
+  onOpenHelp
 }) => {
   return (
     <div className="absolute top-0 left-0 w-full h-full pointer-events-none">
@@ -40,25 +48,69 @@ export const DatabaseControls: React.FC<DatabaseControlsProps> = ({
             <div>TOTAL RECORDS: {tablesData.reduce((sum, table) => sum + table.recordCount, 0).toLocaleString()}</div>
           </div>
           
-          <div className="flex gap-2 mt-4">
-            <Button 
+          <div className="grid grid-cols-2 gap-2 mt-4">
+            <Button
               onClick={onCreateTable}
-              variant="outline" 
+              variant="outline"
               size="sm"
               className="border-cyan-400 text-cyan-400 hover:bg-cyan-400 hover:text-black"
             >
               <Plus className="h-4 w-4 mr-1" />
-              CREATE TABLE
+              CREATE
             </Button>
-            <Button 
+            <Button
               onClick={onRefresh}
-              variant="outline" 
+              variant="outline"
               size="sm"
               className="border-cyan-400 text-cyan-400 hover:bg-cyan-400 hover:text-black"
             >
               <RotateCcw className="h-4 w-4 mr-1" />
               REFRESH
             </Button>
+            {onOpenSearch && (
+              <Button
+                onClick={onOpenSearch}
+                variant="outline"
+                size="sm"
+                className="border-green-400 text-green-400 hover:bg-green-400 hover:text-black"
+              >
+                <Search className="h-4 w-4 mr-1" />
+                SEARCH
+              </Button>
+            )}
+            {onOpenAnalytics && (
+              <Button
+                onClick={onOpenAnalytics}
+                variant="outline"
+                size="sm"
+                className="border-purple-400 text-purple-400 hover:bg-purple-400 hover:text-black"
+              >
+                <BarChart3 className="h-4 w-4 mr-1" />
+                ANALYTICS
+              </Button>
+            )}
+            {onOpenSettings && (
+              <Button
+                onClick={onOpenSettings}
+                variant="outline"
+                size="sm"
+                className="border-yellow-400 text-yellow-400 hover:bg-yellow-400 hover:text-black"
+              >
+                <Settings className="h-4 w-4 mr-1" />
+                SETTINGS
+              </Button>
+            )}
+            {onOpenHelp && (
+              <Button
+                onClick={onOpenHelp}
+                variant="outline"
+                size="sm"
+                className="border-pink-400 text-pink-400 hover:bg-pink-400 hover:text-black"
+              >
+                <HelpCircle className="h-4 w-4 mr-1" />
+                HELP
+              </Button>
+            )}
           </div>
         </div>
       </div>
@@ -67,10 +119,16 @@ export const DatabaseControls: React.FC<DatabaseControlsProps> = ({
       <div className="absolute bottom-4 left-4 text-cyan-400 font-mono text-xs pointer-events-auto">
         <div className="bg-black/70 border border-cyan-400 p-3 backdrop-blur-sm rounded">
           <div className="space-y-1">
+            <div className="text-cyan-300 font-bold mb-2">NAVIGATION</div>
             <div>WASD/ARROWS: NAVIGATE</div>
             <div>MOUSE DRAG: ROTATE VIEW</div>
             <div>SCROLL: ZOOM IN/OUT</div>
             <div>SPACE: CREATE NEW TABLE</div>
+            <div className="mt-2 text-cyan-300 font-bold">CAMERA PRESETS</div>
+            <div>1: OVERVIEW MODE</div>
+            <div>2: BIRD'S EYE VIEW</div>
+            <div>3: CINEMATIC ANGLE</div>
+            <div>4: LOW ANGLE VIEW</div>
             <div className="mt-2 text-yellow-400">CLICK DATA BLOCKS TO EDIT</div>
             <div className="text-green-400">CLICK BUILDINGS TO NAVIGATE</div>
           </div>

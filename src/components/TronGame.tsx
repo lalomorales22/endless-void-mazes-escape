@@ -7,6 +7,15 @@ import { DatabaseBuilding } from './buildings/DatabaseBuilding';
 import { DatabaseControls } from './ui/DatabaseControls';
 import { RecordEditDialog } from './ui/RecordEditDialog';
 import { TableCreateDialog } from './ui/TableCreateDialog';
+import { ParticleSystem, DataStreamEffect } from './effects/ParticleSystem';
+import { CameraController } from './effects/CameraController';
+import { DynamicSkybox, LightBeams } from './effects/Environment';
+import { SearchPanel } from './ui/SearchPanel';
+import { AnalyticsDashboard } from './ui/AnalyticsDashboard';
+import { Minimap } from './ui/Minimap';
+import { OnboardingTutorial } from './ui/OnboardingTutorial';
+import { KeyboardShortcuts } from './ui/KeyboardShortcuts';
+import { SettingsPanel, UserSettings } from './ui/SettingsPanel';
 
 interface TableData {
   tableName: string;
@@ -31,12 +40,36 @@ const TronGame: React.FC = () => {
   const buildingsRef = useRef<DatabaseBuilding[]>([]);
   const raycasterRef = useRef<THREE.Raycaster>(new THREE.Raycaster());
   const mouseRef = useRef<THREE.Vector2>(new THREE.Vector2());
-  
+  const particleSystemRef = useRef<ParticleSystem>();
+  const dataStreamRef = useRef<DataStreamEffect>();
+  const skyboxRef = useRef<DynamicSkybox>();
+  const lightBeamsRef = useRef<LightBeams>();
+  const cameraControllerRef = useRef<CameraController>();
+  const lastFrameTimeRef = useRef<number>(Date.now());
+
   const [selectedTable, setSelectedTable] = useState<string | null>(null);
   const [selectedRecord, setSelectedRecord] = useState<SelectedRecord | null>(null);
   const [showCreateTable, setShowCreateTable] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
+  const [showAnalytics, setShowAnalytics] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(() => {
+    return !localStorage.getItem('tron-onboarding-completed');
+  });
+  const [showHelp, setShowHelp] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [tablesData, setTablesData] = useState<TableData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [userSettings, setUserSettings] = useState<UserSettings>(() => {
+    const saved = localStorage.getItem('tron-user-settings');
+    return saved ? JSON.parse(saved) : {
+      showMinimap: true,
+      showFPS: false,
+      particleDensity: 1,
+      cameraSpeed: 1,
+      soundEnabled: false,
+      autoRotate: false
+    };
+  });
   const { toast } = useToast();
 
   // Fetch real table data from Supabase
@@ -95,38 +128,19 @@ const TronGame: React.FC = () => {
 
   const handleTableSelect = (tableName: string) => {
     setSelectedTable(tableName);
-    
+
     // Find the building and animate camera to it
     const building = buildingsRef.current.find(b => b.getTableName() === tableName);
-    if (building && cameraRef.current) {
+    if (building && cameraControllerRef.current) {
       const position = building.getPosition();
-      
-      // Animate camera to focus on the selected building
-      const targetPosition = new THREE.Vector3(
-        position.x + 30,
-        position.y + 20,
-        position.z + 30
+      const lookAtPosition = new THREE.Vector3(position.x, position.y + 10, position.z);
+
+      // Use the camera controller for smooth animation
+      cameraControllerRef.current.animateToTarget(
+        lookAtPosition,
+        new THREE.Vector3(30, 20, 30),
+        2000
       );
-      
-      // Smooth camera transition
-      const startPosition = cameraRef.current.position.clone();
-      const startTime = Date.now();
-      const duration = 2000; // 2 seconds
-      
-      const animateCamera = () => {
-        const elapsed = Date.now() - startTime;
-        const progress = Math.min(elapsed / duration, 1);
-        const easeProgress = 1 - Math.pow(1 - progress, 3); // Ease out cubic
-        
-        cameraRef.current!.position.lerpVectors(startPosition, targetPosition, easeProgress);
-        cameraRef.current!.lookAt(position.x, position.y + 10, position.z);
-        
-        if (progress < 1) {
-          requestAnimationFrame(animateCamera);
-        }
-      };
-      
-      animateCamera();
     }
   };
 
@@ -184,6 +198,48 @@ const TronGame: React.FC = () => {
     }
   };
 
+  const handleSearch = async (query: string, table: string) => {
+    try {
+      toast({
+        title: "Searching Database",
+        description: `Searching for "${query}" in ${table === 'all' ? 'all tables' : table}...`,
+      });
+
+      // This is a placeholder for actual search functionality
+      // In a real implementation, you would search through the database
+      setShowSearch(false);
+
+      if (table !== 'all') {
+        handleTableSelect(table);
+      }
+    } catch (error) {
+      console.error('Search error:', error);
+      toast({
+        title: "Search Failed",
+        description: "Failed to search database",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleOnboardingComplete = () => {
+    localStorage.setItem('tron-onboarding-completed', 'true');
+    setShowOnboarding(false);
+    toast({
+      title: "Welcome!",
+      description: "You're all set! Explore your database in 3D.",
+    });
+  };
+
+  const handleSettingsSave = (settings: UserSettings) => {
+    setUserSettings(settings);
+    localStorage.setItem('tron-user-settings', JSON.stringify(settings));
+    toast({
+      title: "Settings Saved",
+      description: "Your preferences have been updated.",
+    });
+  };
+
   // Handle mouse clicks for object interaction
   const handleMouseClick = (event: MouseEvent) => {
     if (!cameraRef.current || !sceneRef.current) return;
@@ -228,7 +284,7 @@ const TronGame: React.FC = () => {
     // Scene setup
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x000011);
-    scene.fog = new THREE.Fog(0x000011, 50, 500);
+    scene.fog = new THREE.Fog(0x000011, 50, 600);
     sceneRef.current = scene;
 
     // Camera setup
@@ -241,6 +297,10 @@ const TronGame: React.FC = () => {
     camera.position.set(0, 50, 100);
     camera.lookAt(0, 0, 0);
     cameraRef.current = camera;
+
+    // Initialize camera controller
+    const cameraController = new CameraController(camera);
+    cameraControllerRef.current = cameraController;
 
     // Renderer setup
     const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -284,7 +344,7 @@ const TronGame: React.FC = () => {
     // Create buildings for each table
     const createBuildings = () => {
       buildingsRef.current = [];
-      
+
       tablesData.forEach((tableData, index) => {
         const building = new DatabaseBuilding(
           tableData,
@@ -292,10 +352,31 @@ const TronGame: React.FC = () => {
           tablesData.length,
           handleRecordClick
         );
-        
+
         scene.add(building.getGroup());
         buildingsRef.current.push(building);
       });
+
+      // Create particle system
+      const particles = new ParticleSystem(3000, 0x00ffff);
+      scene.add(particles.getGroup());
+      particleSystemRef.current = particles;
+
+      // Create dynamic skybox
+      const skybox = new DynamicSkybox();
+      scene.add(skybox.getGroup());
+      skyboxRef.current = skybox;
+
+      // Create data streams between buildings
+      const buildingPositions = buildingsRef.current.map(b => b.getPosition());
+      const dataStreams = new DataStreamEffect(buildingPositions);
+      scene.add(dataStreams.getGroup());
+      dataStreamRef.current = dataStreams;
+
+      // Create light beams
+      const lightBeams = new LightBeams(buildingPositions);
+      scene.add(lightBeams.getGroup());
+      lightBeamsRef.current = lightBeams;
     };
 
     // Lighting setup
@@ -384,6 +465,28 @@ const TronGame: React.FC = () => {
     };
 
     const handleKeyDown = (event: KeyboardEvent) => {
+      // Handle Escape key - close any open dialogs
+      if (event.code === 'Escape') {
+        setShowSearch(false);
+        setShowAnalytics(false);
+        setShowSettings(false);
+        setShowHelp(false);
+        setShowCreateTable(false);
+        return;
+      }
+
+      // Handle '?' key - show help
+      if (event.key === '?' && !event.shiftKey) {
+        event.preventDefault();
+        setShowHelp(true);
+        return;
+      }
+
+      // Don't process keyboard events if camera is animating
+      if (cameraControllerRef.current?.isCurrentlyAnimating()) {
+        return;
+      }
+
       const speed = 5;
       switch (event.code) {
         case 'KeyW':
@@ -406,8 +509,24 @@ const TronGame: React.FC = () => {
           event.preventDefault();
           setShowCreateTable(true);
           break;
+        case 'Digit1':
+          event.preventDefault();
+          cameraControllerRef.current?.animateToPreset('Overview');
+          break;
+        case 'Digit2':
+          event.preventDefault();
+          cameraControllerRef.current?.animateToPreset('Bird\'s Eye');
+          break;
+        case 'Digit3':
+          event.preventDefault();
+          cameraControllerRef.current?.animateToPreset('Cinematic');
+          break;
+        case 'Digit4':
+          event.preventDefault();
+          cameraControllerRef.current?.animateToPreset('Low Angle');
+          break;
       }
-      
+
       if (event.code === 'KeyA' || event.code === 'ArrowLeft' || event.code === 'KeyD' || event.code === 'ArrowRight') {
         camera.position.x = Math.sin(cameraAngleY) * Math.cos(cameraAngleX) * cameraRadius;
         camera.position.z = Math.cos(cameraAngleY) * Math.cos(cameraAngleX) * cameraRadius;
@@ -419,10 +538,40 @@ const TronGame: React.FC = () => {
     const animate = () => {
       animationIdRef.current = requestAnimationFrame(animate);
 
+      const currentTime = Date.now();
+      const deltaTime = currentTime - lastFrameTimeRef.current;
+      lastFrameTimeRef.current = currentTime;
+      const time = currentTime * 0.001;
+
+      // Update camera controller
+      if (cameraControllerRef.current) {
+        cameraControllerRef.current.update(deltaTime);
+      }
+
       // Update buildings
       buildingsRef.current.forEach(building => {
         building.update();
       });
+
+      // Update particle system
+      if (particleSystemRef.current) {
+        particleSystemRef.current.update();
+      }
+
+      // Update skybox
+      if (skyboxRef.current) {
+        skyboxRef.current.update(time);
+      }
+
+      // Update data streams
+      if (dataStreamRef.current) {
+        dataStreamRef.current.update(time);
+      }
+
+      // Update light beams
+      if (lightBeamsRef.current) {
+        lightBeamsRef.current.update(time);
+      }
 
       renderer.render(scene, camera);
     };
@@ -481,14 +630,58 @@ const TronGame: React.FC = () => {
   return (
     <div className="relative">
       <div ref={mountRef} className="w-full h-screen" />
-      
-      <DatabaseControls 
+
+      {showOnboarding && (
+        <OnboardingTutorial onComplete={handleOnboardingComplete} />
+      )}
+
+      <DatabaseControls
         tablesData={tablesData}
         selectedTable={selectedTable}
         onCreateTable={() => setShowCreateTable(true)}
         onRefresh={fetchTableData}
         onTableSelect={handleTableSelect}
+        onOpenSearch={() => setShowSearch(true)}
+        onOpenAnalytics={() => setShowAnalytics(true)}
+        onOpenSettings={() => setShowSettings(true)}
+        onOpenHelp={() => setShowHelp(true)}
       />
+
+      {userSettings.showMinimap && cameraRef.current && (
+        <Minimap
+          tablesData={tablesData}
+          cameraPosition={cameraRef.current.position}
+          selectedTable={selectedTable}
+          onTableClick={handleTableSelect}
+        />
+      )}
+
+      {showSearch && (
+        <SearchPanel
+          tables={tablesData.map(t => t.tableName)}
+          onSearch={handleSearch}
+          onClose={() => setShowSearch(false)}
+        />
+      )}
+
+      {showAnalytics && (
+        <AnalyticsDashboard
+          tablesData={tablesData}
+          onClose={() => setShowAnalytics(false)}
+        />
+      )}
+
+      {showSettings && (
+        <SettingsPanel
+          currentSettings={userSettings}
+          onSave={handleSettingsSave}
+          onClose={() => setShowSettings(false)}
+        />
+      )}
+
+      {showHelp && (
+        <KeyboardShortcuts onClose={() => setShowHelp(false)} />
+      )}
 
       {selectedRecord && (
         <RecordEditDialog

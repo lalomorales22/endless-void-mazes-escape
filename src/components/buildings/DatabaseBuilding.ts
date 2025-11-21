@@ -36,13 +36,13 @@ export class DatabaseBuilding {
     const radius = 60;
     const x = Math.cos(angle) * radius;
     const z = Math.sin(angle) * radius;
-    
+
     this.group.position.set(x, 0, z);
 
     // Building structure - transparent glass with framework
     const buildingGeometry = new THREE.BoxGeometry(15, this.buildingHeight, 15);
-    
-    // Glass material
+
+    // Glass material with enhanced properties
     const glassMaterial = new THREE.MeshPhysicalMaterial({
       color: this.getBuildingColor(),
       transparent: true,
@@ -52,6 +52,7 @@ export class DatabaseBuilding {
       roughness: 0.1,
       clearcoat: 1.0,
       clearcoatRoughness: 0.1,
+      metalness: 0.1,
     });
 
     const building = new THREE.Mesh(buildingGeometry, glassMaterial);
@@ -60,30 +61,97 @@ export class DatabaseBuilding {
     building.receiveShadow = true;
     this.group.add(building);
 
-    // Building framework
+    // Building framework with animated lines
     const frameGeometry = new THREE.EdgesGeometry(buildingGeometry);
-    const frameMaterial = new THREE.LineBasicMaterial({ 
+    const frameMaterial = new THREE.LineBasicMaterial({
       color: this.getBuildingColor(),
       transparent: true,
-      opacity: 0.8 
+      opacity: 0.8
     });
     const frame = new THREE.LineSegments(frameGeometry, frameMaterial);
     frame.position.y = this.buildingHeight / 2;
+    frame.userData.originalOpacity = 0.8;
     this.group.add(frame);
 
-    // Base platform
+    // Enhanced base platform with multiple tiers
     const baseGeometry = new THREE.CylinderGeometry(10, 12, 2, 8);
     const baseMaterial = new THREE.MeshPhongMaterial({
       color: this.getBuildingColor(),
       emissive: this.getBuildingColor(),
-      emissiveIntensity: 0.1
+      emissiveIntensity: 0.2,
+      shininess: 100
     });
     const base = new THREE.Mesh(baseGeometry, baseMaterial);
     base.position.y = 1;
+    base.castShadow = true;
     this.group.add(base);
+
+    // Add glowing ring at base
+    const ringGeometry = new THREE.TorusGeometry(11, 0.3, 16, 100);
+    const ringMaterial = new THREE.MeshBasicMaterial({
+      color: this.getBuildingColor(),
+      transparent: true,
+      opacity: 0.6,
+      blending: THREE.AdditiveBlending
+    });
+    const ring = new THREE.Mesh(ringGeometry, ringMaterial);
+    ring.rotation.x = Math.PI / 2;
+    ring.position.y = 0.5;
+    this.group.add(ring);
+
+    // Add vertical light columns at corners
+    this.createLightColumns();
+
+    // Add holographic scanlines
+    this.createScanlines();
 
     // Table name label
     this.createLabel();
+  }
+
+  private createLightColumns() {
+    const columnPositions = [
+      { x: 7.5, z: 7.5 },
+      { x: -7.5, z: 7.5 },
+      { x: 7.5, z: -7.5 },
+      { x: -7.5, z: -7.5 }
+    ];
+
+    columnPositions.forEach(pos => {
+      const geometry = new THREE.CylinderGeometry(0.3, 0.3, this.buildingHeight, 8);
+      const material = new THREE.MeshBasicMaterial({
+        color: this.getBuildingColor(),
+        transparent: true,
+        opacity: 0.4,
+        blending: THREE.AdditiveBlending
+      });
+
+      const column = new THREE.Mesh(geometry, material);
+      column.position.set(pos.x, this.buildingHeight / 2, pos.z);
+      this.group.add(column);
+    });
+  }
+
+  private createScanlines() {
+    const scanlineCount = Math.floor(this.buildingHeight / 5);
+
+    for (let i = 0; i < scanlineCount; i++) {
+      const y = (i / scanlineCount) * this.buildingHeight + 5;
+      const geometry = new THREE.TorusGeometry(8, 0.1, 8, 32);
+      const material = new THREE.MeshBasicMaterial({
+        color: this.getBuildingColor(),
+        transparent: true,
+        opacity: 0.3,
+        blending: THREE.AdditiveBlending
+      });
+
+      const scanline = new THREE.Mesh(geometry, material);
+      scanline.rotation.x = Math.PI / 2;
+      scanline.position.y = y;
+      scanline.userData.baseY = y;
+      scanline.userData.index = i;
+      this.group.add(scanline);
+    }
   }
 
   private createDataBlocks() {
@@ -243,19 +311,46 @@ export class DatabaseBuilding {
   public update() {
     // Animate building elements
     const time = Date.now() * 0.001;
-    
+
     // Gentle building sway
     this.group.rotation.y = Math.sin(time * 0.5) * 0.005;
-    
+
+    // Animate all children for enhanced effects
+    this.group.children.forEach((child) => {
+      // Animate scanlines
+      if (child.userData.baseY !== undefined) {
+        const scanline = child as THREE.Mesh;
+        const material = scanline.material as THREE.MeshBasicMaterial;
+        const index = scanline.userData.index || 0;
+
+        // Wave effect moving up the building
+        scanline.position.y = scanline.userData.baseY + Math.sin(time * 2 - index * 0.3) * 0.5;
+        material.opacity = 0.2 + Math.abs(Math.sin(time * 2 - index * 0.3)) * 0.3;
+      }
+
+      // Animate frame
+      if (child instanceof THREE.LineSegments && child.userData.originalOpacity !== undefined) {
+        const material = child.material as THREE.LineBasicMaterial;
+        material.opacity = child.userData.originalOpacity + Math.sin(time * 1.5) * 0.2;
+      }
+
+      // Animate base ring
+      if (child.geometry instanceof THREE.TorusGeometry && child.position.y < 2) {
+        child.rotation.z = time * 0.5;
+        const material = child.material as THREE.MeshBasicMaterial;
+        material.opacity = 0.4 + Math.sin(time * 2) * 0.2;
+      }
+    });
+
     // Animate record blocks with more subtle movement
     this.recordBlocks.forEach((block, index) => {
       block.rotation.y = time * 0.3 + index * 0.1;
-      
+
       // More subtle floating animation
       const baseY = block.userData.baseY || block.position.y;
       block.userData.baseY = baseY;
       block.position.y = baseY + Math.sin(time * 1.5 + index) * 0.2;
-      
+
       // Add gentle pulsing to emissive intensity
       const material = block.material as THREE.MeshPhongMaterial;
       const baseIntensity = 0.3;
